@@ -9,11 +9,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://shipzi-complete.vercel.app',
-    'https://shipzi-complete-*.vercel.app',
-  ],
+  origin: true,
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));

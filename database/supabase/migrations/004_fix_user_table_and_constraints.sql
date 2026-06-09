@@ -233,3 +233,55 @@ WHERE NOT EXISTS (SELECT 1 FROM box_catalog WHERE company_id = '00000000-0000-00
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('company-logos', 'company-logos', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- =============================================
+-- 12. TRIGGER: Auto-seed box catalog for new companies
+-- =============================================
+CREATE OR REPLACE FUNCTION seed_default_boxes()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
+  VALUES
+    (NEW.id, 'Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
+    (NEW.id, 'Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
+    (NEW.id, 'Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
+    (NEW.id, 'Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
+    (NEW.id, 'Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_seed_boxes ON companies;
+CREATE TRIGGER trg_seed_boxes
+  AFTER INSERT ON companies
+  FOR EACH ROW
+  EXECUTE FUNCTION seed_default_boxes();
+
+-- =============================================
+-- 13. Also seed boxes for the demo company
+-- =============================================
+INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
+SELECT '00000000-0000-0000-0000-000000000001', box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score
+FROM (VALUES
+  ('Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
+  ('Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
+  ('Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
+  ('Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
+  ('Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80)
+) AS v(box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
+WHERE NOT EXISTS (SELECT 1 FROM box_catalog WHERE company_id = '00000000-0000-0000-0000-000000000001');
+
+-- =============================================
+-- 14. Seed boxes for ALL existing companies that have none
+-- =============================================
+INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
+SELECT c.id, v.box_name, v.length_cm, v.width_cm, v.height_cm, v.max_weight_kg, v.material_type, v.cost_per_box_usd, v.sustainability_score
+FROM companies c
+CROSS JOIN (VALUES
+  ('Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
+  ('Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
+  ('Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
+  ('Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
+  ('Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80)
+) AS v(box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
+WHERE NOT EXISTS (SELECT 1 FROM box_catalog bc WHERE bc.company_id = c.id);

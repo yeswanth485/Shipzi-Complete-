@@ -54,12 +54,32 @@ export default function BoxCatalogPage() {
     max_weight_kg: '', material_type: 'corrugated', cost_per_box_usd: '', sustainability_score: '70',
   })
 
+  const DEFAULT_BOXES = [
+    { box_name: 'Small Parcel', length_cm: 20, width_cm: 15, height_cm: 10, max_weight_kg: 2, material_type: 'corrugated', cost_per_box_usd: 0.85, sustainability_score: 72 },
+    { box_name: 'Medium Box', length_cm: 35, width_cm: 25, height_cm: 20, max_weight_kg: 8, material_type: 'corrugated', cost_per_box_usd: 1.40, sustainability_score: 68 },
+    { box_name: 'Large Box', length_cm: 50, width_cm: 40, height_cm: 30, max_weight_kg: 20, material_type: 'corrugated', cost_per_box_usd: 2.20, sustainability_score: 65 },
+    { box_name: 'Poly Mailer S', length_cm: 25, width_cm: 35, height_cm: 2, max_weight_kg: 1, material_type: 'poly_mailer', cost_per_box_usd: 0.35, sustainability_score: 45 },
+    { box_name: 'Rigid Gift Box', length_cm: 30, width_cm: 20, height_cm: 10, max_weight_kg: 3, material_type: 'rigid', cost_per_box_usd: 3.50, sustainability_score: 80 },
+  ]
+
   const fetchBoxes = async () => {
     if (!companyId) return
     try {
       const { data, error } = await supabase.from('box_catalog').select('*').eq('company_id', companyId).order('created_at')
       if (error) console.error("Box catalog fetch error:", error)
-      setBoxes((data as BoxItem[]) ?? [])
+      let boxesData = (data as BoxItem[]) ?? []
+
+      // If no boxes exist for this company, seed default boxes
+      if (boxesData.length === 0) {
+        const toInsert = DEFAULT_BOXES.map(b => ({ ...b, company_id: companyId, is_active: true }))
+        const { error: seedErr } = await supabase.from('box_catalog').insert(toInsert)
+        if (!seedErr) {
+          const { data: refetched } = await supabase.from('box_catalog').select('*').eq('company_id', companyId).order('created_at')
+          boxesData = (refetched as BoxItem[]) ?? []
+        }
+      }
+
+      setBoxes(boxesData)
     } catch (err) {
       console.error("Box catalog fetch exception:", err)
     } finally {
