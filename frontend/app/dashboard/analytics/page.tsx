@@ -39,7 +39,7 @@ const Tip = ({ active, payload, label }: {
 }
 
 export default function AnalyticsPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [snapshots, setSnapshots] = useState<AnalyticsSnapshotRow[]>([])
   const [orders,    setOrders]    = useState<OrderForAnalytics[]>([])
   const [range,     setRange]     = useState<Range>('30D')
@@ -48,26 +48,35 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const [{ data: snaps }, { data: ords }] = await Promise.all([
-      supabase.from('analytics_snapshots')
-        .select('*').eq('company_id', companyId)
-        .order('snapshot_date', { ascending: true }),
-      supabase.from('optimized_orders')
-        .select('savings_usd,utilization_pct,sustainability_score,created_at,fit_status,recommended_box_id')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: true })
-        .limit(2000),
-    ])
-    setSnapshots((snaps as AnalyticsSnapshotRow[]) ?? [])
-    setOrders(((ords as OptimizedOrderRow[]) ?? []).map(o => ({
-      savings_usd:                o.savings_usd,
-      utilization_pct:            o.utilization_pct,
-      sustainability_score:       o.sustainability_score,
-      created_at:                 o.created_at,
-      fit_status:                 o.fit_status,
-      recommended_box_material:   null,
-    })))
-    setLoading(false)
+    try {
+      const [{ data: snaps, error: snapErr }, { data: ords, error: ordErr }] = await Promise.all([
+        supabase.from('analytics_snapshots')
+          .select('*').eq('company_id', companyId)
+          .order('snapshot_date', { ascending: true }),
+        supabase.from('optimized_orders')
+          .select('savings_usd,utilization_pct,sustainability_score,created_at,fit_status,recommended_box_id')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: true })
+          .limit(2000),
+      ])
+      
+      if (snapErr) console.error("Analytics fetch error:", snapErr)
+      if (ordErr) console.error("Orders fetch error:", ordErr)
+
+      setSnapshots((snaps as AnalyticsSnapshotRow[]) ?? [])
+      setOrders(((ords as OptimizedOrderRow[]) ?? []).map(o => ({
+        savings_usd:                o.savings_usd,
+        utilization_pct:            o.utilization_pct,
+        sustainability_score:       o.sustainability_score,
+        created_at:                 o.created_at,
+        fit_status:                 o.fit_status,
+        recommended_box_material:   null,
+      })))
+    } catch (err) {
+      console.error("Analytics fetch exception:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [companyId])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -117,9 +126,16 @@ export default function AnalyticsPage() {
     rate: Math.round(s.optimization_rate_pct ?? 0),
   }))
 
-  if (loading) return (
+  if (loading || isUserLoading) return (
     <div className="max-w-7xl mx-auto space-y-4">
       {[1,2,3].map(i => <div key={i} className="glass-card h-56 skeleton" />)}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
     </div>
   )
 
