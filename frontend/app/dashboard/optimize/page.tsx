@@ -88,12 +88,12 @@ export default function OptimizePage() {
     Papa.parse<CSVRow>(file, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h) => h.trim().toLowerCase().replace(/\s+/g, '_'),
-      complete: ({ data }) => {
+      transformHeader: (h: string) => h.trim().toLowerCase().replace(/\s+/g, '_'),
+      complete: ({ data }: { data: CSVRow[] }) => {
         setRawRows(data)
         setStatus('idle')
       },
-      error: (err) => {
+      error: (err: Error) => {
         setErrorMessage(`CSV parse error: ${err.message}`)
         setStatus('error')
       },
@@ -352,7 +352,7 @@ export default function OptimizePage() {
 
               <button
                 onClick={runOptimization}
-                disabled={status === 'processing'}
+                disabled={status === 'parsing'}
                 className="btn-primary w-full justify-center"
                 style={{ padding: '14px' }}>
                 ⚡ Optimize {rawRows.length.toLocaleString()} Shipments

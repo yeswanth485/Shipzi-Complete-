@@ -211,7 +211,6 @@ export default function LandingPage() {
               width={48}
               height={48}
               className="object-contain"
-              style={{ imageRendering: 'high-quality' }}
               priority
             />
             <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>

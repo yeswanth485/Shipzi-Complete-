@@ -62,8 +62,8 @@ export default function SustainabilityPage() {
       supabase.from('sustainability_metrics').select('*').eq('company_id', companyId).order('metric_date'),
       supabase.from('optimized_orders').select('sustainability_score, savings_usd, recommended_box:box_catalog(material_type)').eq('company_id', companyId),
     ]).then(([{ data: m }, { data: o }]) => {
-      setMetrics((m as SustainMetric[]) ?? [])
-      setOrders((o as OrderRow[]) ?? [])
+      setMetrics((m as unknown as SustainMetric[]) ?? [])
+      setOrders((o as unknown as OrderRow[]) ?? [])
       setLoading(false)
     })
   }, [companyId])
