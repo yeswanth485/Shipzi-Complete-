@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =============================================
 -- COMPANIES TABLE (must be before users)
 -- =============================================
-CREATE TABLE companies (
+CREATE TABLE IF NOT EXISTS companies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   logo_url text,
@@ -25,7 +25,7 @@ CREATE TABLE companies (
 -- =============================================
 -- USERS TABLE
 -- =============================================
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY REFERENCES auth.users,
   email text NOT NULL,
   full_name text,
@@ -41,7 +41,7 @@ CREATE TABLE users (
 -- =============================================
 -- BOX CATALOG TABLE
 -- =============================================
-CREATE TABLE box_catalog (
+CREATE TABLE IF NOT EXISTS box_catalog (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
   box_name text NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE box_catalog (
 -- =============================================
 -- OPTIMIZATION RUNS TABLE
 -- =============================================
-CREATE TABLE optimization_runs (
+CREATE TABLE IF NOT EXISTS optimization_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id),
   user_id uuid REFERENCES users(id),
@@ -74,7 +74,7 @@ CREATE TABLE optimization_runs (
 -- =============================================
 -- OPTIMIZED ORDERS TABLE
 -- =============================================
-CREATE TABLE optimized_orders (
+CREATE TABLE IF NOT EXISTS optimized_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   run_id uuid REFERENCES optimization_runs(id),
   company_id uuid REFERENCES companies(id),
@@ -101,7 +101,7 @@ CREATE TABLE optimized_orders (
 -- =============================================
 -- SHIPMENTS TABLE
 -- =============================================
-CREATE TABLE shipments (
+CREATE TABLE IF NOT EXISTS shipments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid REFERENCES optimized_orders(id),
   company_id uuid REFERENCES companies(id),
@@ -118,7 +118,7 @@ CREATE TABLE shipments (
 -- =============================================
 -- ANALYTICS SNAPSHOTS TABLE
 -- =============================================
-CREATE TABLE analytics_snapshots (
+CREATE TABLE IF NOT EXISTS analytics_snapshots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id),
   snapshot_date date NOT NULL,
@@ -133,7 +133,7 @@ CREATE TABLE analytics_snapshots (
 -- =============================================
 -- SUSTAINABILITY METRICS TABLE
 -- =============================================
-CREATE TABLE sustainability_metrics (
+CREATE TABLE IF NOT EXISTS sustainability_metrics (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id),
   metric_date date NOT NULL,
@@ -147,7 +147,7 @@ CREATE TABLE sustainability_metrics (
 -- =============================================
 -- SUBSCRIPTIONS TABLE
 -- =============================================
-CREATE TABLE subscriptions (
+CREATE TABLE IF NOT EXISTS subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id),
   plan text DEFAULT 'free' CHECK (plan IN ('free', 'growth', 'enterprise')),
@@ -234,7 +234,7 @@ VALUES (
   'E-Commerce',
   'Medium (5K-20K)',
   5000
-);
+) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
 VALUES
