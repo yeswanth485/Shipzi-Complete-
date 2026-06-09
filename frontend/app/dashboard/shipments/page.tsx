@@ -93,19 +93,27 @@ export default function ShipmentsPage() {
   const fetchShipments = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const { data } = await supabase
-      .from('shipments')
-      .select(`
-        *,
-        optimized_order:optimized_orders (
-          product_name, savings_usd, utilization_pct,
-          recommended_box:box_catalog (box_name, length_cm, width_cm, height_cm)
-        )
-      `)
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-    setShipments((data as ShipmentWithOrder[]) ?? [])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('shipments')
+        .select(`
+          *,
+          optimized_order:optimized_orders (
+            product_name, savings_usd, utilization_pct,
+            recommended_box:box_catalog (box_name, length_cm, width_cm, height_cm)
+          )
+        `)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+      if (error) console.error("Shipments fetch error:", error)
+      if (!error) {
+        setShipments((data as ShipmentWithOrder[]) ?? [])
+      }
+    } catch (err) {
+      console.error("Shipments fetch exception:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [companyId])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])

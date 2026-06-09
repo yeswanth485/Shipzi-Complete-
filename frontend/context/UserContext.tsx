@@ -32,6 +32,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       .select('*, companies(*)')
       .eq('id', uid)
       .single()
+    if (error) {
+      console.error("fetchUserData error:", error);
+    }
     if (!error && data) setUserData(data as UserRow)
   }, [])
 

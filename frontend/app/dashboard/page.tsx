@@ -98,27 +98,37 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!companyId) return
     ;(async () => {
-      const [{ data: ord }, { data: ship }, { data: snap }] = await Promise.all([
-        supabase.from('optimized_orders')
-          .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status')
-          .eq('company_id', companyId)
-          .order('created_at', { ascending: false })
-          .limit(500),
-        supabase.from('shipments')
-          .select('status,created_at')
-          .eq('company_id', companyId)
-          .order('created_at', { ascending: false })
-          .limit(500),
-        supabase.from('analytics_snapshots')
-          .select('*')
-          .eq('company_id', companyId)
-          .order('snapshot_date', { ascending: true })
-          .limit(30),
-      ])
-      setOrders((ord as OptimizedOrderRow[]) ?? [])
-      setShipments((ship as ShipmentRow[]) ?? [])
-      setSnapshots((snap as AnalyticsSnapshotRow[]) ?? [])
-      setLoading(false)
+      try {
+        const [{ data: ord, error: ordErr }, { data: ship, error: shipErr }, { data: snap, error: snapErr }] = await Promise.all([
+          supabase.from('optimized_orders')
+            .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status')
+            .eq('company_id', companyId)
+            .order('created_at', { ascending: false })
+            .limit(500),
+          supabase.from('shipments')
+            .select('status,created_at')
+            .eq('company_id', companyId)
+            .order('created_at', { ascending: false })
+            .limit(500),
+          supabase.from('analytics_snapshots')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('snapshot_date', { ascending: true })
+            .limit(30),
+        ])
+        
+        if (ordErr) console.error("Orders fetch error:", ordErr)
+        if (shipErr) console.error("Shipments fetch error:", shipErr)
+        if (snapErr) console.error("Snapshots fetch error:", snapErr)
+
+        setOrders((ord as OptimizedOrderRow[]) ?? [])
+        setShipments((ship as ShipmentRow[]) ?? [])
+        setSnapshots((snap as AnalyticsSnapshotRow[]) ?? [])
+      } catch (err) {
+        console.error("Dashboard fetch exception:", err)
+      } finally {
+        setLoading(false)
+      }
     })()
   }, [companyId])
 

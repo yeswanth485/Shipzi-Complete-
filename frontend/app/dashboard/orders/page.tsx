@@ -54,22 +54,28 @@ export default function OrdersPage() {
   const fetchOrders = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const { data, error } = await supabase
-      .from('optimized_orders')
-      .select(`
-        *,
-        recommended_box_data:box_catalog!recommended_box_id (
-          id, box_name, length_cm, width_cm, height_cm,
-          max_weight_kg, cost_per_box_usd, sustainability_score, material_type, is_active, company_id
-        )
-      `)
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('optimized_orders')
+        .select(`
+          *,
+          recommended_box_data:box_catalog!recommended_box_id (
+            id, box_name, length_cm, width_cm, height_cm,
+            max_weight_kg, cost_per_box_usd, sustainability_score, material_type, is_active, company_id
+          )
+        `)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
 
-    if (!error) {
-      setOrders((data as OrderWithBox[]) ?? [])
+      if (error) console.error("Orders fetch error:", error)
+      if (!error) {
+        setOrders((data as OrderWithBox[]) ?? [])
+      }
+    } catch (err) {
+      console.error("Orders fetch exception:", err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [companyId])
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
