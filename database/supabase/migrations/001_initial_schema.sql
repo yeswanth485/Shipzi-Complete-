@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS companies (
 -- USERS TABLE
 -- =============================================
 CREATE TABLE IF NOT EXISTS users (
-  id uuid PRIMARY KEY REFERENCES auth.users,
+  id text PRIMARY KEY,
   email text NOT NULL,
   full_name text,
   avatar_url text,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS box_catalog (
 CREATE TABLE IF NOT EXISTS optimization_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id),
-  user_id uuid REFERENCES users(id),
+  user_id text REFERENCES users(id),
   run_name text,
   total_products integer,
   total_savings_usd numeric,
