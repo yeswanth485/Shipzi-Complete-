@@ -242,11 +242,36 @@ RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
   VALUES
-    (NEW.id, 'Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
-    (NEW.id, 'Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
-    (NEW.id, 'Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
-    (NEW.id, 'Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
-    (NEW.id, 'Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80);
+    (NEW.id, 'XS Corrugated Mailer', 15, 10, 5, 1, 'corrugated', 0.45, 75),
+    (NEW.id, 'Small Corrugated Shipper', 20, 15, 10, 3, 'corrugated', 0.65, 72),
+    (NEW.id, 'Medium Corrugated Box', 30, 22, 15, 7, 'corrugated', 0.95, 70),
+    (NEW.id, 'Standard Shipping Box', 35, 25, 20, 10, 'corrugated', 1.20, 68),
+    (NEW.id, 'Large Corrugated Box', 45, 35, 25, 15, 'corrugated', 1.80, 65),
+    (NEW.id, 'XL Corrugated Container', 55, 40, 30, 20, 'corrugated', 2.40, 62),
+    (NEW.id, 'Flat Corrugated Mailer', 35, 25, 5, 2, 'corrugated', 0.55, 78),
+    (NEW.id, 'Book Mailer Box', 28, 20, 8, 3, 'corrugated', 0.70, 74),
+    (NEW.id, 'Cubic Shipping Box', 25, 25, 25, 12, 'corrugated', 1.35, 66),
+    (NEW.id, 'Long Corrugated Box', 60, 15, 10, 5, 'corrugated', 1.10, 69),
+    (NEW.id, 'Heavy Duty Corrugated', 40, 30, 30, 25, 'corrugated', 2.80, 60),
+    (NEW.id, 'Mini Corrugated Cube', 12, 12, 12, 2, 'corrugated', 0.40, 80),
+    (NEW.id, 'Small Kraft Mailer', 18, 13, 8, 2, 'kraft', 0.55, 85),
+    (NEW.id, 'Medium Kraft Box', 30, 22, 15, 6, 'kraft', 1.00, 82),
+    (NEW.id, 'Large Kraft Shipper', 45, 35, 25, 12, 'kraft', 1.75, 80),
+    (NEW.id, 'Kraft Pizza Box', 35, 35, 5, 2, 'kraft', 0.80, 88),
+    (NEW.id, 'Kraft Gift Box', 25, 18, 10, 3, 'kraft', 1.25, 84),
+    (NEW.id, 'XL Kraft Container', 50, 40, 35, 18, 'kraft', 2.50, 78),
+    (NEW.id, 'Poly Mailer XS', 20, 25, 2, 0.5, 'poly_mailer', 0.15, 35),
+    (NEW.id, 'Poly Mailer Small', 25, 35, 2, 1, 'poly_mailer', 0.22, 38),
+    (NEW.id, 'Poly Mailer Medium', 30, 42, 2, 2, 'poly_mailer', 0.30, 40),
+    (NEW.id, 'Poly Mailer Large', 38, 52, 2, 3, 'poly_mailer', 0.42, 42),
+    (NEW.id, 'Bubble Poly Mailer', 30, 40, 3, 2, 'poly_mailer', 0.55, 32),
+    (NEW.id, 'Poly Mailer XL', 45, 60, 2, 5, 'poly_mailer', 0.60, 36),
+    (NEW.id, 'Small Rigid Gift Box', 15, 10, 8, 2, 'rigid', 2.80, 55),
+    (NEW.id, 'Medium Rigid Box', 25, 18, 10, 4, 'rigid', 3.50, 52),
+    (NEW.id, 'Large Rigid Gift Box', 35, 25, 15, 8, 'rigid', 5.20, 48),
+    (NEW.id, 'Premium Rigid Display Box', 30, 20, 20, 6, 'rigid', 6.50, 45),
+    (NEW.id, 'Rigid Jewelry Box', 12, 10, 5, 1, 'rigid', 2.20, 50),
+    (NEW.id, 'XL Rigid Presentation Box', 45, 35, 20, 12, 'rigid', 8.50, 42);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -258,16 +283,41 @@ CREATE TRIGGER trg_seed_boxes
   EXECUTE FUNCTION seed_default_boxes();
 
 -- =============================================
--- 13. Also seed boxes for the demo company
+-- 13. Seed boxes for the demo company
 -- =============================================
 INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
 SELECT '00000000-0000-0000-0000-000000000001', box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score
 FROM (VALUES
-  ('Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
-  ('Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
-  ('Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
-  ('Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
-  ('Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80)
+  ('XS Corrugated Mailer', 15, 10, 5, 1, 'corrugated', 0.45, 75),
+  ('Small Corrugated Shipper', 20, 15, 10, 3, 'corrugated', 0.65, 72),
+  ('Medium Corrugated Box', 30, 22, 15, 7, 'corrugated', 0.95, 70),
+  ('Standard Shipping Box', 35, 25, 20, 10, 'corrugated', 1.20, 68),
+  ('Large Corrugated Box', 45, 35, 25, 15, 'corrugated', 1.80, 65),
+  ('XL Corrugated Container', 55, 40, 30, 20, 'corrugated', 2.40, 62),
+  ('Flat Corrugated Mailer', 35, 25, 5, 2, 'corrugated', 0.55, 78),
+  ('Book Mailer Box', 28, 20, 8, 3, 'corrugated', 0.70, 74),
+  ('Cubic Shipping Box', 25, 25, 25, 12, 'corrugated', 1.35, 66),
+  ('Long Corrugated Box', 60, 15, 10, 5, 'corrugated', 1.10, 69),
+  ('Heavy Duty Corrugated', 40, 30, 30, 25, 'corrugated', 2.80, 60),
+  ('Mini Corrugated Cube', 12, 12, 12, 2, 'corrugated', 0.40, 80),
+  ('Small Kraft Mailer', 18, 13, 8, 2, 'kraft', 0.55, 85),
+  ('Medium Kraft Box', 30, 22, 15, 6, 'kraft', 1.00, 82),
+  ('Large Kraft Shipper', 45, 35, 25, 12, 'kraft', 1.75, 80),
+  ('Kraft Pizza Box', 35, 35, 5, 2, 'kraft', 0.80, 88),
+  ('Kraft Gift Box', 25, 18, 10, 3, 'kraft', 1.25, 84),
+  ('XL Kraft Container', 50, 40, 35, 18, 'kraft', 2.50, 78),
+  ('Poly Mailer XS', 20, 25, 2, 0.5, 'poly_mailer', 0.15, 35),
+  ('Poly Mailer Small', 25, 35, 2, 1, 'poly_mailer', 0.22, 38),
+  ('Poly Mailer Medium', 30, 42, 2, 2, 'poly_mailer', 0.30, 40),
+  ('Poly Mailer Large', 38, 52, 2, 3, 'poly_mailer', 0.42, 42),
+  ('Bubble Poly Mailer', 30, 40, 3, 2, 'poly_mailer', 0.55, 32),
+  ('Poly Mailer XL', 45, 60, 2, 5, 'poly_mailer', 0.60, 36),
+  ('Small Rigid Gift Box', 15, 10, 8, 2, 'rigid', 2.80, 55),
+  ('Medium Rigid Box', 25, 18, 10, 4, 'rigid', 3.50, 52),
+  ('Large Rigid Gift Box', 35, 25, 15, 8, 'rigid', 5.20, 48),
+  ('Premium Rigid Display Box', 30, 20, 20, 6, 'rigid', 6.50, 45),
+  ('Rigid Jewelry Box', 12, 10, 5, 1, 'rigid', 2.20, 50),
+  ('XL Rigid Presentation Box', 45, 35, 20, 12, 'rigid', 8.50, 42)
 ) AS v(box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
 WHERE NOT EXISTS (SELECT 1 FROM box_catalog WHERE company_id = '00000000-0000-0000-0000-000000000001');
 
@@ -278,10 +328,35 @@ INSERT INTO box_catalog (company_id, box_name, length_cm, width_cm, height_cm, m
 SELECT c.id, v.box_name, v.length_cm, v.width_cm, v.height_cm, v.max_weight_kg, v.material_type, v.cost_per_box_usd, v.sustainability_score
 FROM companies c
 CROSS JOIN (VALUES
-  ('Small Parcel', 20, 15, 10, 2, 'corrugated', 0.85, 72),
-  ('Medium Box', 35, 25, 20, 8, 'corrugated', 1.40, 68),
-  ('Large Box', 50, 40, 30, 20, 'corrugated', 2.20, 65),
-  ('Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
-  ('Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80)
+  ('XS Corrugated Mailer', 15, 10, 5, 1, 'corrugated', 0.45, 75),
+  ('Small Corrugated Shipper', 20, 15, 10, 3, 'corrugated', 0.65, 72),
+  ('Medium Corrugated Box', 30, 22, 15, 7, 'corrugated', 0.95, 70),
+  ('Standard Shipping Box', 35, 25, 20, 10, 'corrugated', 1.20, 68),
+  ('Large Corrugated Box', 45, 35, 25, 15, 'corrugated', 1.80, 65),
+  ('XL Corrugated Container', 55, 40, 30, 20, 'corrugated', 2.40, 62),
+  ('Flat Corrugated Mailer', 35, 25, 5, 2, 'corrugated', 0.55, 78),
+  ('Book Mailer Box', 28, 20, 8, 3, 'corrugated', 0.70, 74),
+  ('Cubic Shipping Box', 25, 25, 25, 12, 'corrugated', 1.35, 66),
+  ('Long Corrugated Box', 60, 15, 10, 5, 'corrugated', 1.10, 69),
+  ('Heavy Duty Corrugated', 40, 30, 30, 25, 'corrugated', 2.80, 60),
+  ('Mini Corrugated Cube', 12, 12, 12, 2, 'corrugated', 0.40, 80),
+  ('Small Kraft Mailer', 18, 13, 8, 2, 'kraft', 0.55, 85),
+  ('Medium Kraft Box', 30, 22, 15, 6, 'kraft', 1.00, 82),
+  ('Large Kraft Shipper', 45, 35, 25, 12, 'kraft', 1.75, 80),
+  ('Kraft Pizza Box', 35, 35, 5, 2, 'kraft', 0.80, 88),
+  ('Kraft Gift Box', 25, 18, 10, 3, 'kraft', 1.25, 84),
+  ('XL Kraft Container', 50, 40, 35, 18, 'kraft', 2.50, 78),
+  ('Poly Mailer XS', 20, 25, 2, 0.5, 'poly_mailer', 0.15, 35),
+  ('Poly Mailer Small', 25, 35, 2, 1, 'poly_mailer', 0.22, 38),
+  ('Poly Mailer Medium', 30, 42, 2, 2, 'poly_mailer', 0.30, 40),
+  ('Poly Mailer Large', 38, 52, 2, 3, 'poly_mailer', 0.42, 42),
+  ('Bubble Poly Mailer', 30, 40, 3, 2, 'poly_mailer', 0.55, 32),
+  ('Poly Mailer XL', 45, 60, 2, 5, 'poly_mailer', 0.60, 36),
+  ('Small Rigid Gift Box', 15, 10, 8, 2, 'rigid', 2.80, 55),
+  ('Medium Rigid Box', 25, 18, 10, 4, 'rigid', 3.50, 52),
+  ('Large Rigid Gift Box', 35, 25, 15, 8, 'rigid', 5.20, 48),
+  ('Premium Rigid Display Box', 30, 20, 20, 6, 'rigid', 6.50, 45),
+  ('Rigid Jewelry Box', 12, 10, 5, 1, 'rigid', 2.20, 50),
+  ('XL Rigid Presentation Box', 45, 35, 20, 12, 'rigid', 8.50, 42)
 ) AS v(box_name, length_cm, width_cm, height_cm, max_weight_kg, material_type, cost_per_box_usd, sustainability_score)
 WHERE NOT EXISTS (SELECT 1 FROM box_catalog bc WHERE bc.company_id = c.id);

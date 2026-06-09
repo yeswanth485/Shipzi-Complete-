@@ -55,11 +55,40 @@ export default function BoxCatalogPage() {
   })
 
   const DEFAULT_BOXES = [
-    { box_name: 'Small Parcel', length_cm: 20, width_cm: 15, height_cm: 10, max_weight_kg: 2, material_type: 'corrugated', cost_per_box_usd: 0.85, sustainability_score: 72 },
-    { box_name: 'Medium Box', length_cm: 35, width_cm: 25, height_cm: 20, max_weight_kg: 8, material_type: 'corrugated', cost_per_box_usd: 1.40, sustainability_score: 68 },
-    { box_name: 'Large Box', length_cm: 50, width_cm: 40, height_cm: 30, max_weight_kg: 20, material_type: 'corrugated', cost_per_box_usd: 2.20, sustainability_score: 65 },
-    { box_name: 'Poly Mailer S', length_cm: 25, width_cm: 35, height_cm: 2, max_weight_kg: 1, material_type: 'poly_mailer', cost_per_box_usd: 0.35, sustainability_score: 45 },
-    { box_name: 'Rigid Gift Box', length_cm: 30, width_cm: 20, height_cm: 10, max_weight_kg: 3, material_type: 'rigid', cost_per_box_usd: 3.50, sustainability_score: 80 },
+    // ── Corrugated Boxes (12) ──────────────────────────
+    { box_name: 'XS Corrugated Mailer', length_cm: 15, width_cm: 10, height_cm: 5, max_weight_kg: 1, material_type: 'corrugated', cost_per_box_usd: 0.45, sustainability_score: 75 },
+    { box_name: 'Small Corrugated Shipper', length_cm: 20, width_cm: 15, height_cm: 10, max_weight_kg: 3, material_type: 'corrugated', cost_per_box_usd: 0.65, sustainability_score: 72 },
+    { box_name: 'Medium Corrugated Box', length_cm: 30, width_cm: 22, height_cm: 15, max_weight_kg: 7, material_type: 'corrugated', cost_per_box_usd: 0.95, sustainability_score: 70 },
+    { box_name: 'Standard Shipping Box', length_cm: 35, width_cm: 25, height_cm: 20, max_weight_kg: 10, material_type: 'corrugated', cost_per_box_usd: 1.20, sustainability_score: 68 },
+    { box_name: 'Large Corrugated Box', length_cm: 45, width_cm: 35, height_cm: 25, max_weight_kg: 15, material_type: 'corrugated', cost_per_box_usd: 1.80, sustainability_score: 65 },
+    { box_name: 'XL Corrugated Container', length_cm: 55, width_cm: 40, height_cm: 30, max_weight_kg: 20, material_type: 'corrugated', cost_per_box_usd: 2.40, sustainability_score: 62 },
+    { box_name: 'Flat CorrugatedMailer', length_cm: 35, width_cm: 25, height_cm: 5, max_weight_kg: 2, material_type: 'corrugated', cost_per_box_usd: 0.55, sustainability_score: 78 },
+    { box_name: 'Book Mailer Box', length_cm: 28, width_cm: 20, height_cm: 8, max_weight_kg: 3, material_type: 'corrugated', cost_per_box_usd: 0.70, sustainability_score: 74 },
+    { box_name: 'Cubic Shipping Box', length_cm: 25, width_cm: 25, height_cm: 25, max_weight_kg: 12, material_type: 'corrugated', cost_per_box_usd: 1.35, sustainability_score: 66 },
+    { box_name: 'Long Corrugated Box', length_cm: 60, width_cm: 15, height_cm: 10, max_weight_kg: 5, material_type: 'corrugated', cost_per_box_usd: 1.10, sustainability_score: 69 },
+    { box_name: 'Heavy Duty Corrugated', length_cm: 40, width_cm: 30, height_cm: 30, max_weight_kg: 25, material_type: 'corrugated', cost_per_box_usd: 2.80, sustainability_score: 60 },
+    { box_name: 'Mini Corrugated Cube', length_cm: 12, width_cm: 12, height_cm: 12, max_weight_kg: 2, material_type: 'corrugated', cost_per_box_usd: 0.40, sustainability_score: 80 },
+    // ── Kraft Boxes (6) ────────────────────────────────
+    { box_name: 'Small Kraft Mailer', length_cm: 18, width_cm: 13, height_cm: 8, max_weight_kg: 2, material_type: 'kraft', cost_per_box_usd: 0.55, sustainability_score: 85 },
+    { box_name: 'Medium Kraft Box', length_cm: 30, width_cm: 22, height_cm: 15, max_weight_kg: 6, material_type: 'kraft', cost_per_box_usd: 1.00, sustainability_score: 82 },
+    { box_name: 'Large Kraft Shipper', length_cm: 45, width_cm: 35, height_cm: 25, max_weight_kg: 12, material_type: 'kraft', cost_per_box_usd: 1.75, sustainability_score: 80 },
+    { box_name: 'Kraft Pizza Box', length_cm: 35, width_cm: 35, height_cm: 5, max_weight_kg: 2, material_type: 'kraft', cost_per_box_usd: 0.80, sustainability_score: 88 },
+    { box_name: 'Kraft Gift Box', length_cm: 25, width_cm: 18, height_cm: 10, max_weight_kg: 3, material_type: 'kraft', cost_per_box_usd: 1.25, sustainability_score: 84 },
+    { box_name: 'XL Kraft Container', length_cm: 50, width_cm: 40, height_cm: 35, max_weight_kg: 18, material_type: 'kraft', cost_per_box_usd: 2.50, sustainability_score: 78 },
+    // ── Poly Mailers (6) ───────────────────────────────
+    { box_name: 'Poly Mailer XS', length_cm: 20, width_cm: 25, height_cm: 2, max_weight_kg: 0.5, material_type: 'poly_mailer', cost_per_box_usd: 0.15, sustainability_score: 35 },
+    { box_name: 'Poly Mailer Small', length_cm: 25, width_cm: 35, height_cm: 2, max_weight_kg: 1, material_type: 'poly_mailer', cost_per_box_usd: 0.22, sustainability_score: 38 },
+    { box_name: 'Poly Mailer Medium', length_cm: 30, width_cm: 42, height_cm: 2, max_weight_kg: 2, material_type: 'poly_mailer', cost_per_box_usd: 0.30, sustainability_score: 40 },
+    { box_name: 'Poly Mailer Large', length_cm: 38, width_cm: 52, height_cm: 2, max_weight_kg: 3, material_type: 'poly_mailer', cost_per_box_usd: 0.42, sustainability_score: 42 },
+    { box_name: 'Bubble Poly Mailer', length_cm: 30, width_cm: 40, height_cm: 3, max_weight_kg: 2, material_type: 'poly_mailer', cost_per_box_usd: 0.55, sustainability_score: 32 },
+    { box_name: 'Poly Mailer XL', length_cm: 45, width_cm: 60, height_cm: 2, max_weight_kg: 5, material_type: 'poly_mailer', cost_per_box_usd: 0.60, sustainability_score: 36 },
+    // ── Rigid Boxes (6) ────────────────────────────────
+    { box_name: 'Small Rigid Gift Box', length_cm: 15, width_cm: 10, height_cm: 8, max_weight_kg: 2, material_type: 'rigid', cost_per_box_usd: 2.80, sustainability_score: 55 },
+    { box_name: 'Medium Rigid Box', length_cm: 25, width_cm: 18, height_cm: 10, max_weight_kg: 4, material_type: 'rigid', cost_per_box_usd: 3.50, sustainability_score: 52 },
+    { box_name: 'Large Rigid Gift Box', length_cm: 35, width_cm: 25, height_cm: 15, max_weight_kg: 8, material_type: 'rigid', cost_per_box_usd: 5.20, sustainability_score: 48 },
+    { box_name: 'Premium Rigid Display Box', length_cm: 30, width_cm: 20, height_cm: 20, max_weight_kg: 6, material_type: 'rigid', cost_per_box_usd: 6.50, sustainability_score: 45 },
+    { box_name: 'Rigid Jewelry Box', length_cm: 12, width_cm: 10, height_cm: 5, max_weight_kg: 1, material_type: 'rigid', cost_per_box_usd: 2.20, sustainability_score: 50 },
+    { box_name: 'XL Rigid Presentation Box', length_cm: 45, width_cm: 35, height_cm: 20, max_weight_kg: 12, material_type: 'rigid', cost_per_box_usd: 8.50, sustainability_score: 42 },
   ]
 
   const fetchBoxes = async () => {
