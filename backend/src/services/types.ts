@@ -35,6 +35,7 @@ export interface ParsedProduct {
   quantity: number
   weight_kg: number
   row_index: number              // 0-based row in CSV (for error reporting)
+  warnings?: string[]            // non-fatal warnings attached to row
 }
 
 // ── Box from box_catalog ──
@@ -137,6 +138,7 @@ export interface OptimizedOrderRow {
 export interface ValidationResult {
   valid: boolean
   errors: string[]
+  warnings: string[]
   row: ParsedProduct | null
 }
 
@@ -165,8 +167,10 @@ export function calcDimWeight(l: number, w: number, h: number): number {
   return parseFloat(((l * w * h) / DIM_DIVISOR).toFixed(3))
 }
 
+export const BASE_RATE_PER_KG = 1.20  // USD per kg — industry average ground
+
 export function calcShippingCost(dimWeightKg: number, actualWeightKg: number, zone: string): number {
   const billableWeight = Math.max(dimWeightKg, actualWeightKg)
   const rate = getZoneRate(zone)
-  return parseFloat((billableWeight * rate * 0.85).toFixed(2))
+  return parseFloat((billableWeight * BASE_RATE_PER_KG * rate).toFixed(2))
 }

@@ -266,3 +266,18 @@ VALUES
 
 -- Storage bucket for company logos
 -- Run this in Supabase dashboard: Storage > New bucket "company-logos" (public)
+
+-- =============================================
+-- SAFETY ALTERS — make schema self-contained
+-- These are idempotent; safe to re-run.
+-- =============================================
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS fragility_score numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS used_box_length_cm numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS used_box_width_cm  numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS used_box_height_cm numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS used_box_price_usd  numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS original_box_price_usd numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS optimized_box_price_usd numeric;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS fit_status          text;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS optimization_reason text;
+ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS run_row_index       integer;
