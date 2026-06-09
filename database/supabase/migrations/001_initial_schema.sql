@@ -173,52 +173,61 @@ ALTER TABLE sustainability_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Users: can only see own row
+DROP POLICY IF EXISTS "Users can read own data" ON users;
 CREATE POLICY "Users can read own data" ON users
   FOR ALL USING (id = auth.uid());
 
 -- Companies: members can access own company
+DROP POLICY IF EXISTS "Company members access" ON companies;
 CREATE POLICY "Company members access" ON companies
   FOR ALL USING (
     id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Box catalog RLS
+DROP POLICY IF EXISTS "Box catalog company access" ON box_catalog;
 CREATE POLICY "Box catalog company access" ON box_catalog
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Optimization runs RLS
+DROP POLICY IF EXISTS "Optimization runs company access" ON optimization_runs;
 CREATE POLICY "Optimization runs company access" ON optimization_runs
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Optimized orders RLS
+DROP POLICY IF EXISTS "Orders company access" ON optimized_orders;
 CREATE POLICY "Orders company access" ON optimized_orders
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Shipments RLS
+DROP POLICY IF EXISTS "Shipments company access" ON shipments;
 CREATE POLICY "Shipments company access" ON shipments
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Analytics snapshots RLS
+DROP POLICY IF EXISTS "Analytics company access" ON analytics_snapshots;
 CREATE POLICY "Analytics company access" ON analytics_snapshots
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Sustainability metrics RLS
+DROP POLICY IF EXISTS "Sustainability company access" ON sustainability_metrics;
 CREATE POLICY "Sustainability company access" ON sustainability_metrics
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
 -- Subscriptions RLS
+DROP POLICY IF EXISTS "Subscriptions company access" ON subscriptions;
 CREATE POLICY "Subscriptions company access" ON subscriptions
   FOR ALL USING (
     company_id = (SELECT company_id FROM users WHERE id = auth.uid())
