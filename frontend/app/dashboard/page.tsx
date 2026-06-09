@@ -42,7 +42,7 @@ function AnimatedCounter({ value, prefix = '', suffix = '' }: {
 
 // ── Stat card ────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, prefix, suffix, trend, color }: {
-  icon: React.ComponentType<{ size?: number; color?: string }>
+  icon: React.ComponentType<{ size?: number | string; color?: string }>
   label: string; value: number
   prefix?: string; suffix?: string
   trend?: string; color: string

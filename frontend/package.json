@@ -9,27 +9,29 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.0",
-    "react": "^18",
-    "react-dom": "^18",
-    "typescript": "^5",
-    "tailwindcss": "^3.4",
-    "autoprefixer": "^10",
-    "postcss": "^8",
-    "@supabase/supabase-js": "^2.39",
-    "firebase": "^10.8",
-    "@react-three/fiber": "^8.15",
     "@react-three/drei": "^9.92",
-    "three": "^0.160",
-    "framer-motion": "^11",
-    "gsap": "^3.12",
-    "recharts": "^2.10",
-    "lucide-react": "^0.330",
-    "papaparse": "^5.4",
-    "@types/papaparse": "^5.3",
-    "@types/three": "^0.160",
+    "@react-three/fiber": "^8.15",
+    "@supabase/supabase-js": "^2.39",
     "@types/node": "^20",
     "@types/react": "^18",
-    "@types/react-dom": "^18"
+    "@types/react-dom": "^18",
+    "@types/three": "^0.160",
+    "autoprefixer": "^10",
+    "firebase": "^10.8",
+    "framer-motion": "^11",
+    "gsap": "^3.12",
+    "lucide-react": "^0.330",
+    "next": "14.2.0",
+    "papaparse": "^5.4",
+    "postcss": "^8",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.10",
+    "tailwindcss": "^3.4",
+    "three": "^0.160",
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2"
   }
 }
