@@ -45,12 +45,17 @@ export default function SignupPage() {
     setLoading(true); setServerError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
-      await supabase.from('users').insert({
+      // Upsert so we don't fail if row already exists
+      const { error: insertErr } = await supabase.from('users').upsert({
         id:                  cred.user.uid,
         email:               form.email,
         full_name:           form.fullName,
         onboarding_complete: false,
-      })
+      }, { onConflict: 'id' })
+      if (insertErr) {
+        console.error('User insert error:', insertErr)
+        // Continue anyway — onboarding or UserContext will retry
+      }
       setAuthCookieLocal(cred.user.uid)
       router.push('/onboarding')
     } catch (err: unknown) {
@@ -67,16 +72,14 @@ export default function SignupPage() {
     try {
       const result = await signInWithPopup(auth, new GoogleAuthProvider())
       const uid = result.user.uid
-      const { data: existing } = await supabase.from('users').select('id').eq('id', uid).single()
-      if (!existing) {
-        await supabase.from('users').insert({
-          id:                  uid,
-          email:               result.user.email!,
-          full_name:           result.user.displayName,
-          avatar_url:          result.user.photoURL,
-          onboarding_complete: false,
-        })
-      }
+      // Upsert user row
+      await supabase.from('users').upsert({
+        id:                  uid,
+        email:               result.user.email!,
+        full_name:           result.user.displayName,
+        avatar_url:          result.user.photoURL,
+        onboarding_complete: false,
+      }, { onConflict: 'id' })
       setAuthCookieLocal(uid)
       router.push('/onboarding')
     } catch (err: any) {

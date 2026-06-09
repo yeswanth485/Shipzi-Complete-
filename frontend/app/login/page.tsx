@@ -47,6 +47,21 @@ export default function LoginPage() {
     setLoading(true); setError('')
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password)
+      // Ensure user row exists in DB (for Firebase users created outside our signup)
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', cred.user.uid)
+        .single()
+      if (!existing) {
+        await supabase.from('users').upsert({
+          id: cred.user.uid,
+          email: cred.user.email || email,
+          full_name: cred.user.displayName || '',
+          avatar_url: cred.user.photoURL || '',
+          onboarding_complete: false,
+        }, { onConflict: 'id' })
+      }
       await handlePostLogin(cred.user.uid)
     } catch {
       setError('Invalid email or password. Please try again.')
@@ -60,20 +75,13 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, new GoogleAuthProvider())
       const uid = result.user.uid
       // Upsert user row (new Google users won't have one yet)
-      const { data: existing } = await supabase
-        .from('users')
-        .select('onboarding_complete')
-        .eq('id', uid)
-        .single()
-      if (!existing) {
-        await supabase.from('users').insert({
-          id: uid,
-          email: result.user.email!,
-          full_name: result.user.displayName,
-          avatar_url: result.user.photoURL,
-          onboarding_complete: false,
-        })
-      }
+      await supabase.from('users').upsert({
+        id: uid,
+        email: result.user.email!,
+        full_name: result.user.displayName,
+        avatar_url: result.user.photoURL,
+        onboarding_complete: false,
+      }, { onConflict: 'id' })
       await handlePostLogin(uid)
     } catch (err: any) {
       console.error('Google sign-in error:', err)

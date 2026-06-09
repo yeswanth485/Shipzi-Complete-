@@ -120,12 +120,27 @@ export default function OnboardingPage() {
       if (companyError) throw new Error(`Company creation failed: ${companyError.message}`)
       if (!company) throw new Error('Company creation returned no data.')
 
-      // 2. Update user row
-      const { error: userError } = await supabase.from('users')
-        .update({ company_id: company.id, onboarding_complete: true })
+      // 2. Ensure user row exists, then update with company_id
+      const { data: existingUser } = await supabase.from('users')
+        .select('id')
         .eq('id', firebaseUser.uid)
-      
-      if (userError) throw new Error(`User update failed: ${userError.message}`)
+        .single()
+      if (!existingUser) {
+        // Insert user row if it somehow doesn't exist yet
+        await supabase.from('users').upsert({
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          full_name: firebaseUser.displayName || '',
+          avatar_url: firebaseUser.photoURL || '',
+          company_id: company.id,
+          onboarding_complete: true,
+        }, { onConflict: 'id' })
+      } else {
+        const { error: userError } = await supabase.from('users')
+          .update({ company_id: company.id, onboarding_complete: true })
+          .eq('id', firebaseUser.uid)
+        if (userError) throw new Error(`User update failed: ${userError.message}`)
+      }
 
       // 3. Create subscription (ignore if already exists)
       await supabase.from('subscriptions')
