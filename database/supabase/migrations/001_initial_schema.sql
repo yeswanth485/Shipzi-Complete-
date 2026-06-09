@@ -161,19 +161,29 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('company-logos', 'company-logos', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Safely drop existing policies so this script can be re-run (handles both old and new names)
+DO $$ 
+BEGIN
+  DROP POLICY IF EXISTS "Public reads for company logos" ON storage.objects;
+  DROP POLICY IF EXISTS "Authenticated users can upload logos" ON storage.objects;
+  DROP POLICY IF EXISTS "Authenticated users can update logos" ON storage.objects;
+  DROP POLICY IF EXISTS "Public users can upload logos" ON storage.objects;
+  DROP POLICY IF EXISTS "Public users can update logos" ON storage.objects;
+END $$;
+
 -- Allow public read access to company logos
 CREATE POLICY "Public reads for company logos" 
 ON storage.objects FOR SELECT TO public
 USING (bucket_id = 'company-logos');
 
--- Allow authenticated users to upload their own logos
-CREATE POLICY "Authenticated users can upload logos" 
-ON storage.objects FOR INSERT TO authenticated
+-- Allow public users to upload their own logos (Firebase Auth means Supabase sees anon/public)
+CREATE POLICY "Public users can upload logos" 
+ON storage.objects FOR INSERT TO public
 WITH CHECK (bucket_id = 'company-logos');
 
--- Allow authenticated users to update logos
-CREATE POLICY "Authenticated users can update logos" 
-ON storage.objects FOR UPDATE TO authenticated
+-- Allow public users to update logos
+CREATE POLICY "Public users can update logos" 
+ON storage.objects FOR UPDATE TO public
 USING (bucket_id = 'company-logos');
 
 

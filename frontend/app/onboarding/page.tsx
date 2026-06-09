@@ -26,7 +26,7 @@ const WAREHOUSE_SIZES = [
   { value: 'enterprise', label: 'Enterprise', sub: '100K+ sqft', icon: '🌆' },
 ]
 const VOLUME_OPTIONS = ['< 500', '500–5K', '5K–50K', '50K+']
-const REGIONS = ['North America', 'Europe', 'Asia-Pacific', 'Latin America', 'Middle East', 'Africa']
+const REGIONS = ['North America', 'Europe', 'Asia-Pacific', 'Latin America', 'Middle East', 'Africa', 'India', 'Tamil Nadu']
 const PACKAGING_GOALS = ['Reduce Shipping Costs', 'Minimize Void Fill', 'Right-Size All Packages', 'Eliminate Oversized Boxes', 'Standardize Box Inventory', 'Reduce Returns Due to Damage']
 const SUSTAINABILITY_GOALS = ['Reduce Carbon Footprint', 'Use Recyclable Materials', 'Achieve Carbon Neutral Shipping', 'Minimize Packaging Waste', 'ESG Compliance Reporting']
 
@@ -70,23 +70,29 @@ export default function OnboardingPage() {
 
   const [submitError, setSubmitError] = useState('')
 
+  const [logoWarning, setLogoWarning] = useState('')
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setLogoUploading(true)
     setSubmitError('')
+    setLogoWarning('')
     try {
       const ext = file.name.split('.').pop()
-      const path = `${firebaseUser?.uid}/logo.${ext}`
+      const path = `${firebaseUser?.uid ?? 'anon'}/logo.${ext}`
       const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true })
       if (!error) {
         const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
         updateForm({ logoUrl: urlData.publicUrl })
       } else {
-        setSubmitError(`Logo upload failed: ${error.message}`)
+        // Don't block onboarding — just warn
+        console.warn('Logo upload skipped:', error.message)
+        setLogoWarning('Logo upload skipped (storage policy). You can add it later in Settings.')
       }
     } catch (err: any) {
-      setSubmitError(`Logo upload error: ${err.message}`)
+      console.warn('Logo upload error:', err.message)
+      setLogoWarning('Logo upload skipped. You can add it later in Settings.')
     } finally {
       setLogoUploading(false)
     }
@@ -99,6 +105,7 @@ export default function OnboardingPage() {
     try {
       const volumeMap: Record<string, number> = { '< 500': 100, '500–5K': 2500, '5K–50K': 25000, '50K+': 100000 }
       
+      // 1. Create company
       const { data: company, error: companyError } = await supabase.from('companies').insert({
         name: form.companyName,
         logo_url: form.logoUrl || null,
@@ -111,27 +118,27 @@ export default function OnboardingPage() {
       }).select().single()
 
       if (companyError) throw new Error(`Company creation failed: ${companyError.message}`)
+      if (!company) throw new Error('Company creation returned no data.')
 
-      if (company) {
-        const { error: userError } = await supabase.from('users')
-          .update({ company_id: company.id, onboarding_complete: true })
-          .eq('id', firebaseUser.uid)
-        
-        if (userError) throw new Error(`User update failed: ${userError.message}`)
+      // 2. Update user row
+      const { error: userError } = await supabase.from('users')
+        .update({ company_id: company.id, onboarding_complete: true })
+        .eq('id', firebaseUser.uid)
+      
+      if (userError) throw new Error(`User update failed: ${userError.message}`)
 
-        const { error: subError } = await supabase.from('subscriptions')
-          .insert({ company_id: company.id, plan: 'free', monthly_shipment_limit: 100 })
-        
-        if (subError) throw new Error(`Subscription creation failed: ${subError.message}`)
+      // 3. Create subscription (ignore if already exists)
+      await supabase.from('subscriptions')
+        .insert({ company_id: company.id, plan: 'free', monthly_shipment_limit: 100 })
 
-        setOnboardingComplete()
-        await refreshUser()
-        router.push('/dashboard')
-      }
+      // 4. Set cookie FIRST so middleware allows /dashboard, then redirect immediately
+      setOnboardingComplete()
+      // Refresh context in background — don't await so we don't block the redirect
+      refreshUser().catch(console.error)
+      router.push('/dashboard')
     } catch (err: any) {
       console.error('Onboarding complete error:', err)
       setSubmitError(err.message || 'An unknown error occurred during setup.')
-    } finally {
       setLoading(false)
     }
   }
@@ -223,6 +230,11 @@ export default function OnboardingPage() {
                       </div>
                     )}
                   </div>
+                  {logoWarning && (
+                    <p className="mt-2 text-xs px-1" style={{ color: 'var(--accent-warning)' }}>
+                      ⚠️ {logoWarning}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
