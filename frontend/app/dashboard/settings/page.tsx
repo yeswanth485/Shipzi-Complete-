@@ -99,6 +99,26 @@ export default function SettingsPage() {
     setToast('Profile saved successfully ✓')
   }
 
+  const handleUpdatePassword = async () => {
+    if (!firebaseUser) return
+    if (newPwd.length < 8) return setToast('Password must be at least 8 characters')
+    if (newPwd !== confirmPwd) return setToast('Passwords do not match')
+    
+    setSaving(true)
+    try {
+      const { updatePassword } = await import('firebase/auth')
+      await updatePassword(firebaseUser, newPwd)
+      setToast('Password updated successfully ✓')
+      setShowChangePwd(false)
+      setNewPwd('')
+      setConfirmPwd('')
+    } catch (err: any) {
+      setToast('Failed to update password. You may need to log in again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const saveCompany = async () => {
     if (!userData?.company_id) return
     setSaving(true)
@@ -213,7 +233,9 @@ export default function SettingsPage() {
                         placeholder="Confirm password" className="input-dark" />
                       <div className="flex gap-2">
                         <button onClick={() => setShowChangePwd(false)} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>Cancel</button>
-                        <button className="btn-primary" style={{ fontSize: 12, padding: '6px 12px' }}>Save Password</button>
+                        <button className="btn-secondary w-full" onClick={handleUpdatePassword} disabled={saving}>
+                          {saving ? 'Updating...' : 'Update Password'}
+                        </button>
                       </div>
                     </div>
                   )}

@@ -56,7 +56,7 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
   const handleLogout = async () => {
     await signOut(auth)
     clearAuthCookies()
-    router.push('/login')
+    router.push('/')
   }
 
   return (
@@ -156,7 +156,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = async () => {
     await signOut(auth)
     clearAuthCookies()
-    router.push('/login')
+    router.push('/')
   }
 
   return (
