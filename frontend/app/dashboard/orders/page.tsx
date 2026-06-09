@@ -80,6 +80,19 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
+  if (loading || isUserLoading) return (
+    <div className="max-w-7xl mx-auto space-y-4">
+      {Array.from({ length: 8 }, (_, i) => <div key={i} className="glass-card h-16 skeleton" />)}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
+    </div>
+  )
+
   // Filtered + searched + paginated
   const filtered = orders.filter(o => {
     const matchSearch = !search || o.product_name?.toLowerCase().includes(search.toLowerCase())

@@ -42,7 +42,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 }
 
 export default function BoxCatalogPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [boxes, setBoxes] = useState<BoxItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<BoxItem | null>(null)
@@ -56,9 +56,15 @@ export default function BoxCatalogPage() {
 
   const fetchBoxes = async () => {
     if (!companyId) return
-    const { data } = await supabase.from('box_catalog').select('*').eq('company_id', companyId).order('created_at')
-    setBoxes((data as BoxItem[]) ?? [])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase.from('box_catalog').select('*').eq('company_id', companyId).order('created_at')
+      if (error) console.error("Box catalog fetch error:", error)
+      setBoxes((data as BoxItem[]) ?? [])
+    } catch (err) {
+      console.error("Box catalog fetch exception:", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchBoxes() }, [companyId])
@@ -93,6 +99,19 @@ export default function BoxCatalogPage() {
     if (selected?.id === box.id) setSelected({ ...box, is_active: !box.is_active })
     setToast(`Box ${!box.is_active ? 'activated' : 'deactivated'}`)
   }
+
+  if (loading || isUserLoading) return (
+    <div className="max-w-7xl mx-auto space-y-4">
+      {Array.from({ length: 5 }, (_, i) => <div key={i} className="glass-card h-16 skeleton" />)}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
+    </div>
+  )
 
   return (
     <div className="max-w-7xl mx-auto">

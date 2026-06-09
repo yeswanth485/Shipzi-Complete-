@@ -89,7 +89,7 @@ const CustomTooltip = ({ active, payload, label }: {
 }
 
 export default function DashboardPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [orders,    setOrders]    = useState<OptimizedOrderRow[]>([])
   const [shipments, setShipments] = useState<ShipmentRow[]>([])
   const [snapshots, setSnapshots] = useState<AnalyticsSnapshotRow[]>([])
@@ -169,11 +169,18 @@ export default function DashboardPage() {
 
   const recent5 = orders.slice(0, 5)
 
-  if (loading) return (
+  if (loading || isUserLoading) return (
     <div className="max-w-7xl mx-auto space-y-4">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="glass-card h-24 skeleton" />
       ))}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
     </div>
   )
 

@@ -51,21 +51,29 @@ function CircularGauge({ value, max = 100, color = '#10B981', label }: { value: 
 }
 
 export default function SustainabilityPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [metrics, setMetrics] = useState<SustainMetric[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!companyId) return
-    Promise.all([
-      supabase.from('sustainability_metrics').select('*').eq('company_id', companyId).order('metric_date'),
-      supabase.from('optimized_orders').select('sustainability_score, savings_usd, recommended_box:box_catalog(material_type)').eq('company_id', companyId),
-    ]).then(([{ data: m }, { data: o }]) => {
-      setMetrics((m as unknown as SustainMetric[]) ?? [])
-      setOrders((o as unknown as OrderRow[]) ?? [])
-      setLoading(false)
-    })
+    ;(async () => {
+      try {
+        const [{ data: m, error: mErr }, { data: o, error: oErr }] = await Promise.all([
+          supabase.from('sustainability_metrics').select('*').eq('company_id', companyId).order('metric_date'),
+          supabase.from('optimized_orders').select('sustainability_score, savings_usd, recommended_box:box_catalog(material_type)').eq('company_id', companyId),
+        ])
+        if (mErr) console.error("Sustainability metrics fetch error:", mErr)
+        if (oErr) console.error("Orders fetch error:", oErr)
+        setMetrics((m as unknown as SustainMetric[]) ?? [])
+        setOrders((o as unknown as OrderRow[]) ?? [])
+      } catch (err) {
+        console.error("Sustainability fetch exception:", err)
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [companyId])
 
   const avgScore = orders.length ? Math.round(orders.reduce((s, o) => s + (o.sustainability_score ?? 0), 0) / orders.length) : 0
@@ -91,9 +99,16 @@ export default function SustainabilityPage() {
     { label: 'First Eco Box Used', done: orders.some(o => (o.sustainability_score ?? 0) >= 75), icon: '♻️' },
   ]
 
-  if (loading) return (
+  if (loading || isUserLoading) return (
     <div className="max-w-7xl mx-auto space-y-4">
       {Array.from({ length: 3 }, (_, i) => <div key={i} className="glass-card h-48 skeleton" />)}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
     </div>
   )
 

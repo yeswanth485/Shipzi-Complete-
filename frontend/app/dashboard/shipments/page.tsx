@@ -84,7 +84,7 @@ function ProgressTracker({ current }: { current: string }) {
 }
 
 export default function ShipmentsPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [shipments,   setShipments]   = useState<ShipmentWithOrder[]>([])
   const [loading,     setLoading]     = useState(true)
   const [activeTab,   setActiveTab]   = useState<string>('All')
@@ -136,6 +136,19 @@ export default function ShipmentsPage() {
     if (days <= 3) return <span style={{ color: 'var(--accent-warning)' }}>{days}d left</span>
     return <span style={{ color: 'var(--accent-success)' }}>{days}d left</span>
   }
+
+  if (isUserLoading) return (
+    <div className="max-w-7xl mx-auto space-y-4">
+      {Array.from({ length: 6 }, (_, i) => <div key={i} className="glass-card h-16 skeleton" />)}
+    </div>
+  )
+
+  if (!companyId) return (
+    <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
+      <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
+      <p style={{ color: 'var(--text-muted)' }}>We couldn't find your company data. Please try signing out and signing back in.</p>
+    </div>
+  )
 
   return (
     <div className="max-w-7xl mx-auto">

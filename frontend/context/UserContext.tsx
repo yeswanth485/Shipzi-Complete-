@@ -27,15 +27,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchUserData = useCallback(async (uid: string) => {
-    const { data, error } = await supabase
+    // Stage 1: Get the user row (simple query — no joins that could fail)
+    const { data: userRow, error: userErr } = await supabase
       .from('users')
-      .select('*, companies(*)')
+      .select('*')
       .eq('id', uid)
       .single()
-    if (error) {
-      console.error("fetchUserData error:", error);
+
+    if (userErr) {
+      console.error("fetchUserData error:", userErr)
+      return
     }
-    if (!error && data) setUserData(data as UserRow)
+    if (!userRow) return
+
+    // Stage 2: If user has a company_id, try to load company data separately
+    // This is a separate query so if it fails, we still have companyId
+    let companyData = null
+    if (userRow.company_id) {
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', userRow.company_id)
+        .single()
+      if (companyErr) {
+        console.error("fetchCompany error (non-fatal):", companyErr)
+      } else {
+        companyData = company
+      }
+    }
+
+    // Merge company data into userData so settings page can access it
+    setUserData({ ...userRow, companies: companyData } as UserRow)
   }, [])
 
   const refreshUser = useCallback(async () => {
