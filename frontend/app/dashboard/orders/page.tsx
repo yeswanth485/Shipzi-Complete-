@@ -39,7 +39,7 @@ function FitBadge({ fitStatus }: { fitStatus?: string | null }) {
 }
 
 export default function OrdersPage() {
-  const { companyId } = useUser()
+  const { companyId, isLoading: isUserLoading } = useUser()
   const [orders, setOrders] = useState<OrderWithBox[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
