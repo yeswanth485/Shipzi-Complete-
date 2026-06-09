@@ -75,8 +75,10 @@ export default function LoginPage() {
         })
       }
       await handlePostLogin(uid)
-    } catch {
-      setError('Google sign-in failed. Please try again.')
+    } catch (err: any) {
+      console.error('Google sign-in error:', err)
+      const msg = err.message || 'Unknown error occurred'
+      setError(`Google sign-in failed: ${msg}`)
       setLoading(false)
     }
   }

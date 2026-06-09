@@ -79,8 +79,10 @@ export default function SignupPage() {
       }
       setAuthCookieLocal(uid)
       router.push('/onboarding')
-    } catch {
-      setServerError('Google sign-up failed.')
+    } catch (err: any) {
+      console.error('Google sign-up error:', err)
+      const msg = err.message || 'Unknown error occurred'
+      setServerError(`Google sign-up failed: ${msg}`)
       setLoading(false)
     }
   }
