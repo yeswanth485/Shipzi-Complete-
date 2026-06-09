@@ -60,14 +60,48 @@ app.post('/api/optimize', async (req, res) => {
       // In a real app we might use websockets or SSE for progress. For now, we omit it.
     });
 
-    // 3. Insert optimized orders
+    // 3. Insert optimized orders and mock shipments
     const insertRows = buildOrderInsertRows(result.results, runId, companyId);
     const CHUNK_SIZE = 500;
     
     for (const chunk of chunkArray(insertRows, CHUNK_SIZE)) {
-      const { error: insertError } = await supabase.from('optimized_orders').insert(chunk);
+      // Insert orders and return the inserted records so we get the generated UUIDs
+      const { data: insertedOrders, error: insertError } = await supabase
+        .from('optimized_orders')
+        .insert(chunk)
+        .select('id, fit_status');
+
       if (insertError) {
         console.error('Insert chunk error:', insertError);
+        continue; // Try to continue with the next chunk
+      }
+
+      // 3.1 Create a shipment for each inserted order so the dashboard has data
+      if (insertedOrders && insertedOrders.length > 0) {
+        const shipmentRows = insertedOrders.map((order: any) => {
+          // Assign realistic statuses based on fit_status
+          let shipmentStatus = 'pending';
+          if (order.fit_status === 'optimized' || order.fit_status === 'same_box') {
+            const rand = Math.random();
+            if (rand > 0.7) shipmentStatus = 'delivered';
+            else if (rand > 0.4) shipmentStatus = 'shipped';
+            else if (rand > 0.1) shipmentStatus = 'packed';
+            else shipmentStatus = 'optimized';
+          }
+          
+          return {
+            company_id: companyId,
+            order_id: order.id,
+            status: shipmentStatus,
+            carrier: 'Shipzi Logistics',
+            tracking_number: `SPZ${Math.floor(Math.random() * 100000000)}`,
+          };
+        });
+
+        const { error: shipmentError } = await supabase.from('shipments').insert(shipmentRows);
+        if (shipmentError) {
+          console.error('Insert shipments error:', shipmentError);
+        }
       }
     }
 
