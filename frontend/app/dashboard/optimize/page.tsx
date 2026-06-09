@@ -144,6 +144,22 @@ export default function OptimizePage() {
     a.click()
   }
 
+  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 3000): Promise<Response> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 min timeout
+        const response = await fetch(url, { ...options, signal: controller.signal })
+        clearTimeout(timeoutId)
+        return response
+      } catch (err) {
+        if (i === retries - 1) throw err
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+    throw new Error('Max retries reached')
+  }
+
   const runOptimization = async () => {
     if (!companyId || !rawRows.length) return
     setStatus('processing')
@@ -157,14 +173,15 @@ export default function OptimizePage() {
         throw new Error('Backend URL not configured. Set NEXT_PUBLIC_BACKEND_API_URL in Vercel environment variables.')
       }
 
-      // Step 0 — Verify backend is reachable
+      // Step 0 — Wake up backend (Render free tier sleeps after inactivity)
       setCurrentStep(0)
+      setErrorMessage('Connecting to backend (may take 30s if server was sleeping)...')
       try {
-        const healthCheck = await fetch(`${backendUrl}/health`, { method: 'GET' })
-        if (!healthCheck.ok) throw new Error('Backend health check failed')
+        await fetchWithRetry(`${backendUrl}/health`, { method: 'GET' }, 3, 5000)
       } catch {
         throw new Error(`Cannot reach backend at ${backendUrl}. Make sure the backend is deployed and running on Render.`)
       }
+      setErrorMessage('')
 
       // Step 1 — Create optimization run record
       setCurrentStep(1)
@@ -186,7 +203,7 @@ export default function OptimizePage() {
 
       // Step 2 — Send to backend API
       setCurrentStep(2)
-      const response = await fetch(`${backendUrl}/api/optimize`, {
+      const response = await fetchWithRetry(`${backendUrl}/api/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +211,7 @@ export default function OptimizePage() {
           companyId,
           runId: currentRunId
         })
-      });
+      }, 3, 5000);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
