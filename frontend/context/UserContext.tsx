@@ -26,15 +26,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userData, setUserData] = useState<UserRow | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchUserData = useCallback(async (uid: string) => {
+  const fetchUserData = useCallback(async (user: FirebaseUser) => {
     // Stage 1: Get the user row (simple query — no joins that could fail)
-    const { data: userRow, error: userErr } = await supabase
+    let { data: userRow, error: userErr } = await supabase
       .from('users')
       .select('*')
-      .eq('id', uid)
+      .eq('id', user.uid)
       .single()
 
-    if (userErr) {
+    // If the user row does not exist, insert a new one
+    if (userErr && userErr.code === 'PGRST116') {
+      // Try to create a new user row with demo company id
+      const newUser = {
+        id: user.uid,
+        email: user.email || '',
+        full_name: user.displayName || '',
+        avatar_url: user.photoURL || '',
+        company_id: '00000000-0000-0000-0000-000000000001', // Default to demo company
+        onboarding_complete: false,
+        role: 'member',
+      }
+      const { data: inserted, error: insertErr } = await supabase
+        .from('users')
+        .insert([newUser])
+        .select('*')
+        .single();
+      if (insertErr) {
+        console.error('Error inserting new user:', insertErr);
+        return;
+      }
+      userRow = inserted;
+    } else if (userErr) {
       console.error("fetchUserData error:", userErr)
       return
     }
@@ -58,17 +80,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     // Merge company data into userData so settings page can access it
     setUserData({ ...userRow, companies: companyData } as UserRow)
+
   }, [])
 
   const refreshUser = useCallback(async () => {
-    if (firebaseUser) await fetchUserData(firebaseUser.uid)
+    if (firebaseUser) await fetchUserData(firebaseUser)
   }, [firebaseUser, fetchUserData])
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user)
       if (user) {
-        await fetchUserData(user.uid)
+        await fetchUserData(user)
       } else {
         setUserData(null)
       }
