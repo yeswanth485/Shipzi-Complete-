@@ -152,6 +152,20 @@ export default function OptimizePage() {
     setErrorMessage('')
 
     try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL
+      if (!backendUrl) {
+        throw new Error('Backend URL not configured. Set NEXT_PUBLIC_BACKEND_API_URL in Vercel environment variables.')
+      }
+
+      // Step 0 — Verify backend is reachable
+      setCurrentStep(0)
+      try {
+        const healthCheck = await fetch(`${backendUrl}/health`, { method: 'GET' })
+        if (!healthCheck.ok) throw new Error('Backend health check failed')
+      } catch {
+        throw new Error(`Cannot reach backend at ${backendUrl}. Make sure the backend is deployed and running on Render.`)
+      }
+
       // Step 1 — Create optimization run record
       setCurrentStep(1)
       const { data: runData, error: runError } = await supabase
@@ -172,7 +186,6 @@ export default function OptimizePage() {
 
       // Step 2 — Send to backend API
       setCurrentStep(2)
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8080'
       const response = await fetch(`${backendUrl}/api/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -419,7 +432,30 @@ export default function OptimizePage() {
             <div className="glass-card p-8 flex flex-col items-center text-center" style={{ minHeight: 300 }}>
               <AlertCircle size={40} color="var(--accent-danger)" className="mb-4" />
               <h3 className="font-syne text-xl font-bold text-white mb-2">Optimization Failed</h3>
-              <p className="text-sm mb-6 max-w-md" style={{ color: 'var(--text-secondary)' }}>{errorMessage}</p>
+              <p className="text-sm mb-4 max-w-md" style={{ color: 'var(--text-secondary)' }}>{errorMessage}</p>
+              {errorMessage.includes('NEXT_PUBLIC_BACKEND_API_URL') && (
+                <div className="text-xs p-4 rounded-xl max-w-md text-left mb-4"
+                  style={{ background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.3)', color: 'var(--text-secondary)' }}>
+                  <p className="font-semibold mb-2" style={{ color: 'var(--accent-primary)' }}>How to fix:</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Go to Vercel → Settings → Environment Variables</li>
+                    <li>Add: <code className="px-1 rounded" style={{ background: 'var(--bg-elevated)' }}>NEXT_PUBLIC_BACKEND_API_URL</code></li>
+                    <li>Value: your Render backend URL (e.g. <code className="px-1 rounded" style={{ background: 'var(--bg-elevated)' }}>https://your-app.onrender.com</code>)</li>
+                    <li>Redeploy the frontend</li>
+                  </ol>
+                </div>
+              )}
+              {errorMessage.includes('Cannot reach backend') && (
+                <div className="text-xs p-4 rounded-xl max-w-md text-left mb-4"
+                  style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--text-secondary)' }}>
+                  <p className="font-semibold mb-2" style={{ color: 'var(--accent-warning)' }}>Backend not reachable:</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Check your Render backend is deployed and active</li>
+                    <li>Verify the URL is correct (no trailing slash)</li>
+                    <li>Check Render logs for errors</li>
+                  </ol>
+                </div>
+              )}
               <button onClick={() => setStatus('idle')} className="btn-ghost">Try Again</button>
             </div>
           )}
