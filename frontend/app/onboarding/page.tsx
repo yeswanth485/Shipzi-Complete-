@@ -68,10 +68,13 @@ export default function OnboardingPage() {
     updateForm({ [key]: current.includes(value) ? current.filter(v => v !== value) : [...current, value] })
   }
 
+  const [submitError, setSubmitError] = useState('')
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setLogoUploading(true)
+    setSubmitError('')
     try {
       const ext = file.name.split('.').pop()
       const path = `${firebaseUser?.uid}/logo.${ext}`
@@ -79,7 +82,11 @@ export default function OnboardingPage() {
       if (!error) {
         const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
         updateForm({ logoUrl: urlData.publicUrl })
+      } else {
+        setSubmitError(`Logo upload failed: ${error.message}`)
       }
+    } catch (err: any) {
+      setSubmitError(`Logo upload error: ${err.message}`)
     } finally {
       setLogoUploading(false)
     }
@@ -88,9 +95,11 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     if (!firebaseUser) return
     setLoading(true)
+    setSubmitError('')
     try {
       const volumeMap: Record<string, number> = { '< 500': 100, '500–5K': 2500, '5K–50K': 25000, '50K+': 100000 }
-      const { data: company } = await supabase.from('companies').insert({
+      
+      const { data: company, error: companyError } = await supabase.from('companies').insert({
         name: form.companyName,
         logo_url: form.logoUrl || null,
         industry: form.industry,
@@ -101,13 +110,27 @@ export default function OnboardingPage() {
         shipping_regions: form.regions,
       }).select().single()
 
+      if (companyError) throw new Error(`Company creation failed: ${companyError.message}`)
+
       if (company) {
-        await supabase.from('users').update({ company_id: company.id, onboarding_complete: true }).eq('id', firebaseUser.uid)
-        await supabase.from('subscriptions').insert({ company_id: company.id, plan: 'free', monthly_shipment_limit: 100 })
+        const { error: userError } = await supabase.from('users')
+          .update({ company_id: company.id, onboarding_complete: true })
+          .eq('id', firebaseUser.uid)
+        
+        if (userError) throw new Error(`User update failed: ${userError.message}`)
+
+        const { error: subError } = await supabase.from('subscriptions')
+          .insert({ company_id: company.id, plan: 'free', monthly_shipment_limit: 100 })
+        
+        if (subError) throw new Error(`Subscription creation failed: ${subError.message}`)
+
         setOnboardingComplete()
         await refreshUser()
         router.push('/dashboard')
       }
+    } catch (err: any) {
+      console.error('Onboarding complete error:', err)
+      setSubmitError(err.message || 'An unknown error occurred during setup.')
     } finally {
       setLoading(false)
     }
@@ -146,6 +169,13 @@ export default function OnboardingPage() {
               style={{ background: 'var(--accent-primary)', width: `${((step + 1) / 3) * 100}%` }} />
           </div>
         </div>
+
+        {submitError && (
+          <div className="mb-6 p-4 rounded-xl text-sm"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--accent-danger)' }}>
+            {submitError}
+          </div>
+        )}
 
         {/* Steps */}
         <AnimatePresence mode="wait">

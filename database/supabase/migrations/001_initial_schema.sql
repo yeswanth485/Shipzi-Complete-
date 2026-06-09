@@ -127,8 +127,45 @@ CREATE TABLE IF NOT EXISTS analytics_snapshots (
   total_savings_usd numeric DEFAULT 0,
   avg_utilization_pct numeric DEFAULT 0,
   optimization_rate_pct numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(company_id, snapshot_date)
+);
+
+-- =============================================
+-- SUBSCRIPTIONS TABLE
+-- =============================================
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  plan text NOT NULL,
+  monthly_shipment_limit integer,
   created_at timestamptz DEFAULT now()
 );
+
+-- =============================================
+-- STORAGE BUCKETS & POLICIES
+-- =============================================
+
+-- Ensure the company-logos bucket exists and is public
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('company-logos', 'company-logos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow public read access to company logos
+CREATE POLICY "Public reads for company logos" 
+ON storage.objects FOR SELECT TO public
+USING (bucket_id = 'company-logos');
+
+-- Allow authenticated users to upload their own logos
+CREATE POLICY "Authenticated users can upload logos" 
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'company-logos');
+
+-- Allow authenticated users to update logos
+CREATE POLICY "Authenticated users can update logos" 
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'company-logos');
+
 
 -- =============================================
 -- SUSTAINABILITY METRICS TABLE
