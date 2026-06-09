@@ -217,78 +217,32 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 -- =============================================
--- ROW LEVEL SECURITY
+-- ROW LEVEL SECURITY (Disabled for Firebase Auth compatibility)
 -- =============================================
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE box_catalog ENABLE ROW LEVEL SECURITY;
-ALTER TABLE optimization_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE optimized_orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shipments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE analytics_snapshots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sustainability_metrics ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+-- Since the application uses Firebase for authentication instead of Supabase Auth, 
+-- all requests to Supabase are seen as "anon". Therefore, RLS based on auth.uid() 
+-- will block all database operations. For this architecture, we disable RLS.
 
--- Users: can only see own row
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE companies DISABLE ROW LEVEL SECURITY;
+ALTER TABLE box_catalog DISABLE ROW LEVEL SECURITY;
+ALTER TABLE optimization_runs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE optimized_orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE shipments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE analytics_snapshots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE sustainability_metrics DISABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions DISABLE ROW LEVEL SECURITY;
+
+-- Clean up any existing restrictive policies
 DROP POLICY IF EXISTS "Users can read own data" ON users;
-CREATE POLICY "Users can read own data" ON users
-  FOR ALL USING (id = auth.uid());
-
--- Companies: members can access own company
 DROP POLICY IF EXISTS "Company members access" ON companies;
-CREATE POLICY "Company members access" ON companies
-  FOR ALL USING (
-    id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Box catalog RLS
 DROP POLICY IF EXISTS "Box catalog company access" ON box_catalog;
-CREATE POLICY "Box catalog company access" ON box_catalog
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Optimization runs RLS
 DROP POLICY IF EXISTS "Optimization runs company access" ON optimization_runs;
-CREATE POLICY "Optimization runs company access" ON optimization_runs
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Optimized orders RLS
 DROP POLICY IF EXISTS "Orders company access" ON optimized_orders;
-CREATE POLICY "Orders company access" ON optimized_orders
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Shipments RLS
 DROP POLICY IF EXISTS "Shipments company access" ON shipments;
-CREATE POLICY "Shipments company access" ON shipments
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Analytics snapshots RLS
 DROP POLICY IF EXISTS "Analytics company access" ON analytics_snapshots;
-CREATE POLICY "Analytics company access" ON analytics_snapshots
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Sustainability metrics RLS
 DROP POLICY IF EXISTS "Sustainability company access" ON sustainability_metrics;
-CREATE POLICY "Sustainability company access" ON sustainability_metrics
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
-
--- Subscriptions RLS
 DROP POLICY IF EXISTS "Subscriptions company access" ON subscriptions;
-CREATE POLICY "Subscriptions company access" ON subscriptions
-  FOR ALL USING (
-    company_id = (SELECT company_id FROM users WHERE id = auth.uid())
-  );
 
 -- =============================================
 -- DEMO COMPANY + SEED DATA
