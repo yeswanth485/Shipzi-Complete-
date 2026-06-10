@@ -391,7 +391,7 @@ export default function SettingsPage() {
                         {showApiKey ? apiKey : 'sk-shipzi-••••-••••-' + apiKey.slice(-4)}
                       </code>
                       <button onClick={() => setShowApiKey(!showApiKey)} className="p-2 rounded" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                       <button onClick={() => { navigator.clipboard.writeText(apiKey); setKeyCopied(true); setTimeout(() => setKeyCopied(false), 2000) }}
                         className="p-2 rounded" style={{ color: keyCopied ? 'var(--accent-success)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
