@@ -4,7 +4,7 @@
 // All field names match the DB schema exactly
 // =============================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DIM_DIVISOR = exports.ZONE_RATE_MAP = void 0;
+exports.BASE_RATE_PER_KG = exports.DIM_DIVISOR = exports.ZONE_RATE_MAP = void 0;
 exports.getZoneRate = getZoneRate;
 exports.calcDimWeight = calcDimWeight;
 exports.calcShippingCost = calcShippingCost;
@@ -29,8 +29,9 @@ exports.DIM_DIVISOR = 5000; // cm³/kg
 function calcDimWeight(l, w, h) {
     return parseFloat(((l * w * h) / exports.DIM_DIVISOR).toFixed(3));
 }
+exports.BASE_RATE_PER_KG = 1.20; // USD per kg — industry average ground
 function calcShippingCost(dimWeightKg, actualWeightKg, zone) {
     const billableWeight = Math.max(dimWeightKg, actualWeightKg);
     const rate = getZoneRate(zone);
-    return parseFloat((billableWeight * rate * 0.85).toFixed(2));
+    return parseFloat((billableWeight * exports.BASE_RATE_PER_KG * rate).toFixed(2));
 }

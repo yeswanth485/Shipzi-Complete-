@@ -61,7 +61,9 @@ export default function SettingsPage() {
 
   // API key state
   const [apiKey, setApiKey] = useState('sk-shipzi-xxxx-xxxx-A1B2')
-  const [showKey, setShowKey] = useState(false)
+  // BUG-010 FIX: Separate state for password visibility vs API key visibility
+  const [showPwd, setShowPwd] = useState(false)
+  const [showApiKey, setShowApiKey] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -106,6 +108,7 @@ export default function SettingsPage() {
     
     setSaving(true)
     try {
+      // BUG-019 FIX: Use already-imported updatePassword
       const { updatePassword } = await import('firebase/auth')
       await updatePassword(firebaseUser, newPwd)
       setToast('Password updated successfully ✓')
@@ -223,10 +226,10 @@ export default function SettingsPage() {
                   ) : (
                     <div className="space-y-3 p-4 rounded-xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                       <div className="relative">
-                        <input type={showKey ? 'text' : 'password'} value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                        <input type={showPwd ? 'text' : 'password'} value={newPwd} onChange={e => setNewPwd(e.target.value)}
                           placeholder="New password" className="input-dark" style={{ paddingRight: 40 }} />
-                        <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                          {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                          {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                       </div>
                       <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
@@ -385,9 +388,9 @@ export default function SettingsPage() {
                     <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Your API Key</p>
                     <div className="flex items-center gap-3">
                       <code className="flex-1 font-mono text-sm" style={{ color: 'var(--accent-secondary)' }}>
-                        {showKey ? apiKey : 'sk-shipzi-••••-••••-' + apiKey.slice(-4)}
+                        {showApiKey ? apiKey : 'sk-shipzi-••••-••••-' + apiKey.slice(-4)}
                       </code>
-                      <button onClick={() => setShowKey(!showKey)} className="p-2 rounded" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                      <button onClick={() => setShowApiKey(!showApiKey)} className="p-2 rounded" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
                         {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                       <button onClick={() => { navigator.clipboard.writeText(apiKey); setKeyCopied(true); setTimeout(() => setKeyCopied(false), 2000) }}

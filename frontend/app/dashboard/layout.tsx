@@ -48,16 +48,9 @@ function Avatar({ name, url, size = 36 }: { name?: string | null; url?: string |
   )
 }
 
-function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
+function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: () => void; onLogout: () => void }) {
   const pathname = usePathname()
-  const router = useRouter()
   const { userData } = useUser()
-
-  const handleLogout = async () => {
-    await signOut(auth)
-    clearAuthCookies()
-    router.push('/')
-  }
 
   return (
     <div className="flex flex-col h-full"
@@ -115,10 +108,10 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
         style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <Avatar name={userData?.full_name} url={userData?.avatar_url} size={36} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{userData?.full_name ?? 'User'}</p>
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>              {userData?.full_name ?? 'User'}</p>
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{userData?.email}</p>
         </div>
-        <button onClick={handleLogout} className="flex-shrink-0 p-1.5 rounded-lg transition-colors"
+        <button onClick={onLogout} className="flex-shrink-0 p-1.5 rounded-lg transition-colors"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-danger)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
@@ -135,6 +128,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { firebaseUser, userData, isLoading } = useUser()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [avatarDropdown, setAvatarDropdown] = useState(false)
+
+  // BUG-017 FIX: Close avatar dropdown on outside click
+  useEffect(() => {
+    if (!avatarDropdown) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-avatar-dropdown]')) setAvatarDropdown(false)
+    }
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [avatarDropdown])
 
   useEffect(() => {
     if (!isLoading && !firebaseUser) {
@@ -153,6 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const pageTitle = pageTitles[pathname] ?? 'Dashboard'
 
+  // BUG-012 FIX: Use single handleLogout (removed duplicate in Sidebar)
   const handleLogout = async () => {
     await signOut(auth)
     clearAuthCookies()
@@ -163,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen" style={{ background: 'var(--bg-void)' }}>
       {/* Desktop Sidebar */}
       <div className="fixed top-0 left-0 bottom-0 w-[240px] z-40 hidden md:block">
-        <Sidebar />
+        <Sidebar onLogout={handleLogout} />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -176,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setMobileOpen(false)} />
             <motion.div initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 30 }}
               className="fixed top-0 left-0 bottom-0 w-[240px] z-50 md:hidden">
-              <Sidebar mobile onClose={() => setMobileOpen(false)} />
+              <Sidebar mobile onClose={() => setMobileOpen(false)} onLogout={handleLogout} />
             </motion.div>
           </>
         )}
@@ -204,7 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
           <span className="text-sm hidden md:block" style={{ color: 'var(--text-muted)' }}>{userData?.companies?.name}</span>
 
-          <div className="relative">
+          <div className="relative" data-avatar-dropdown onClick={e => e.stopPropagation()}>
             <button onClick={() => setAvatarDropdown(!avatarDropdown)}
               className="flex items-center gap-2 p-1.5 rounded-lg transition-colors"
               style={{ background: avatarDropdown ? 'rgba(255,255,255,0.05)' : 'transparent' }}>

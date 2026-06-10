@@ -1,6 +1,7 @@
 -- =============================================
 -- SHIPZI DATABASE SCHEMA
 -- Migration: 001_initial_schema.sql
+-- BUG-006 FIX: Removed duplicate subscriptions table
 -- =============================================
 
 -- Enable UUID generation
@@ -142,13 +143,17 @@ CREATE TABLE IF NOT EXISTS analytics_snapshots (
 );
 
 -- =============================================
--- SUBSCRIPTIONS TABLE
+-- SUBSCRIPTIONS TABLE (single definition)
 -- =============================================
 CREATE TABLE IF NOT EXISTS subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
-  plan text NOT NULL,
+  plan text DEFAULT 'free' CHECK (plan IN ('free', 'growth', 'enterprise')),
+  status text DEFAULT 'active',
   monthly_shipment_limit integer,
+  current_usage integer DEFAULT 0,
+  billing_cycle_start date,
+  billing_cycle_end date,
   created_at timestamptz DEFAULT now()
 );
 
@@ -161,7 +166,7 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('company-logos', 'company-logos', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Safely drop existing policies so this script can be re-run (handles both old and new names)
+-- Safely drop existing policies so this script can be re-run
 DO $$ 
 BEGIN
   DROP POLICY IF EXISTS "Public reads for company logos" ON storage.objects;
@@ -176,7 +181,7 @@ CREATE POLICY "Public reads for company logos"
 ON storage.objects FOR SELECT TO public
 USING (bucket_id = 'company-logos');
 
--- Allow public users to upload their own logos (Firebase Auth means Supabase sees anon/public)
+-- Allow public users to upload their own logos
 CREATE POLICY "Public users can upload logos" 
 ON storage.objects FOR INSERT TO public
 WITH CHECK (bucket_id = 'company-logos');
@@ -202,27 +207,8 @@ CREATE TABLE IF NOT EXISTS sustainability_metrics (
 );
 
 -- =============================================
--- SUBSCRIPTIONS TABLE
--- =============================================
-CREATE TABLE IF NOT EXISTS subscriptions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id uuid REFERENCES companies(id),
-  plan text DEFAULT 'free' CHECK (plan IN ('free', 'growth', 'enterprise')),
-  status text DEFAULT 'active',
-  monthly_shipment_limit integer,
-  current_usage integer DEFAULT 0,
-  billing_cycle_start date,
-  billing_cycle_end date,
-  created_at timestamptz DEFAULT now()
-);
-
--- =============================================
 -- ROW LEVEL SECURITY (Disabled for Firebase Auth compatibility)
 -- =============================================
--- Since the application uses Firebase for authentication instead of Supabase Auth, 
--- all requests to Supabase are seen as "anon". Therefore, RLS based on auth.uid() 
--- will block all database operations. For this architecture, we disable RLS.
-
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE companies DISABLE ROW LEVEL SECURITY;
 ALTER TABLE box_catalog DISABLE ROW LEVEL SECURITY;
@@ -264,12 +250,8 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'Poly Mailer S', 25, 35, 2, 1, 'poly_mailer', 0.35, 45),
   ('00000000-0000-0000-0000-000000000001', 'Rigid Gift Box', 30, 20, 10, 3, 'rigid', 3.50, 80);
 
--- Storage bucket for company logos
--- Run this in Supabase dashboard: Storage > New bucket "company-logos" (public)
-
 -- =============================================
 -- SAFETY ALTERS — make schema self-contained
--- These are idempotent; safe to re-run.
 -- =============================================
 ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS fragility_score numeric;
 ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS used_box_length_cm numeric;
@@ -281,3 +263,13 @@ ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS optimized_box_price_usd nu
 ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS fit_status          text;
 ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS optimization_reason text;
 ALTER TABLE optimized_orders ADD COLUMN IF NOT EXISTS run_row_index       integer;
+
+-- BUG-015 FIX: RPC function to increment subscription usage
+CREATE OR REPLACE FUNCTION increment_usage(p_company_id uuid)
+RETURNS void AS $$
+BEGIN
+  UPDATE subscriptions
+  SET current_usage = current_usage + 1
+  WHERE company_id = p_company_id;
+END;
+$$ LANGUAGE plpgsql;

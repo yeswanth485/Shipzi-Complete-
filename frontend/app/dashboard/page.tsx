@@ -159,13 +159,21 @@ export default function DashboardPage() {
     return { label, count: count || 0 }
   })
 
-  const boxUsage = [
-    { name: 'Small Parcel', value: 35 },
-    { name: 'Medium Box',   value: 28 },
-    { name: 'Large Box',    value: 18 },
-    { name: 'Poly Mailer',  value: 12 },
-    { name: 'Rigid Gift',   value: 7  },
-  ]
+  // BUG-008 FIX: Compute box usage from actual order data instead of hardcoded values
+  const boxUsage = (() => {
+    const counts: Record<string, number> = {}
+    orders.forEach(o => {
+      const name = (o as any).recommended_box?.box_name ?? (o as any).recommended_box_name ?? 'Unknown'
+      if (name && name !== 'No fit found' && name !== 'Same Box') {
+        counts[name] = (counts[name] ?? 0) + 1
+      }
+    })
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    if (sorted.length === 0) return [
+      { name: 'No data yet', value: 1 },
+    ]
+    return sorted.map(([name, value]) => ({ name, value }))
+  })()
 
   const recent5 = orders.slice(0, 5)
 

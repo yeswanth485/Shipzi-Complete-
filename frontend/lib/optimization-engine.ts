@@ -1,6 +1,6 @@
 // =============================================
-// SHIPZI — Optimization Engine
-// Handles 2,000–10,000 CSV rows safely
+// SHIPZI — Optimization Engine (Frontend copy)
+// Synced with backend/src/services/optimization-engine.ts
 // =============================================
 import {
   ParsedProduct,
@@ -37,12 +37,13 @@ export function validateCSVRow(raw: CSVRow, rowIndex: number): ValidationResult 
   if (isNaN(ubp) || ubp < 0) errors.push('used_box_price must be >= 0')
   if (!raw.shipping_zone?.trim()) errors.push('shipping_zone is required')
 
-  if (errors.length > 0) return { valid: false, errors, row: null }
+  // Fatal errors — drop row
+  if (errors.length > 0) return { valid: false, errors, warnings: [], row: null }
 
-  // Ensure product fits in the used box (basic sanity)
+  // Non-fatal warnings — build the row anyway
+  const warnings: string[] = []
   if (pl > ubl || pw > ubw || ph > ubh) {
-    errors.push('Product dimensions exceed used_box dimensions — data may be incorrect')
-    // Still parse — we warn but don't reject outright
+    warnings.push('Product dimensions may exceed used_box — verify data')
   }
 
   const row: ParsedProduct = {
@@ -59,9 +60,10 @@ export function validateCSVRow(raw: CSVRow, rowIndex: number): ValidationResult 
     quantity: Math.max(1, parseInt(raw.quantity ?? '1') || 1),
     weight_kg: parseFloat(raw.weight_kg ?? '0.5') || 0.5,
     row_index: rowIndex,
+    warnings,
   }
 
-  return { valid: errors.length === 0, errors, row }
+  return { valid: true, errors: [], warnings, row }
 }
 
 // ── Fragility padding (cm added to each dimension) ────────────────
@@ -78,19 +80,12 @@ export function selectOptimalBox(
 ): OptimizationResult {
   const pad = fragilityPadding(product.fragility_score)
 
-  // Minimum safe box dimensions for this product
+  // Minimum safe box dimensions for this product (with padding)
   const minL = product.product_length + pad
   const minW = product.product_width + pad
-  const minH = product.product_height + pad
+  // FIX 6: Stack units vertically; add padding once (not per unit)
+  const minH = (product.product_height * product.quantity) + pad
   const minWeight = product.weight_kg * product.quantity
-
-  // Filter boxes that safely fit the product
-  const fittingBoxes = catalog.filter(b =>
-    b.length_cm >= minL &&
-    b.width_cm >= minW &&
-    b.height_cm >= minH &&
-    b.max_weight_kg >= minWeight
-  )
 
   const originalBoxDims = `${product.used_box_length}×${product.used_box_width}×${product.used_box_height}`
   const originalBoxVol = product.used_box_length * product.used_box_width * product.used_box_height
@@ -98,6 +93,20 @@ export function selectOptimalBox(
   const originalDimWeight = calcDimWeight(product.used_box_length, product.used_box_width, product.used_box_height)
   const originalShipping = calcShippingCost(originalDimWeight, product.weight_kg * product.quantity, product.shipping_zone)
   const originalTotalCost = product.used_box_price + originalShipping
+
+  // FIX 1: Sorted-dims rotation check
+  function boxFitsProduct(box: CatalogBox): boolean {
+    const boxDims  = [box.length_cm, box.width_cm, box.height_cm].sort((a, b) => b - a)
+    const prodDims = [minL, minW, minH].sort((a, b) => b - a)
+    return (
+      boxDims[0] >= prodDims[0] &&
+      boxDims[1] >= prodDims[1] &&
+      boxDims[2] >= prodDims[2] &&
+      box.max_weight_kg >= minWeight
+    )
+  }
+
+  const fittingBoxes = catalog.filter(boxFitsProduct)
 
   if (fittingBoxes.length === 0) {
     return {
@@ -121,41 +130,109 @@ export function selectOptimalBox(
     }
   }
 
-  // Score each fitting box: prioritize smaller volume (tight fit) + lower cost + eco score
-  const scored = fittingBoxes.map(box => {
-    const boxVol = box.length_cm * box.width_cm * box.height_cm
+  // Step 2: Only consider boxes SMALLER than the original used box
+  const smallerFittingBoxes = fittingBoxes.filter(b => {
+    const boxVol = b.length_cm * b.width_cm * b.height_cm
+    return boxVol < originalBoxVol
+  })
+
+  // Step 3: If no smaller box fits, the current box is already optimal
+  if (smallerFittingBoxes.length === 0) {
+    const bestFit = fittingBoxes
+      .map(b => {
+        const boxVol = b.length_cm * b.width_cm * b.height_cm
+        const utilization = Math.min((productVol / boxVol) * 100, 100)
+        return { box: b, utilization, boxVol }
+      })
+      .sort((a, b) => a.boxVol - b.boxVol)[0]
+
+    return {
+      row_index: product.row_index,
+      product_name: product.product_name,
+      original_box_dimensions: originalBoxDims,
+      original_box_price: product.used_box_price,
+      optimized_box_dimensions: originalBoxDims,
+      optimized_box_price: product.used_box_price,
+      recommended_box_id: null,
+      recommended_box_name: 'Same Box',
+      shipping_zone: product.shipping_zone,
+      savings: 0,
+      fit_status: 'same_box',
+      optimization_reason: `Current box (${originalBoxDims}cm, volume ${originalBoxVol}cm³) is already the smallest option.`,
+      utilization_pct: parseFloat(Math.min((productVol / (bestFit?.boxVol || originalBoxVol)) * 100, 100).toFixed(1)),
+      dimensional_weight_kg: originalDimWeight,
+      sustainability_score: 0,
+      parsed_product: product,
+      recommended_box: null,
+    }
+  }
+
+  // FIX 2: Scoring with normalized cost
+  const allCosts = smallerFittingBoxes.map(b => {
+    const dw = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
+    return b.cost_per_box_usd + calcShippingCost(dw, product.weight_kg * product.quantity, product.shipping_zone)
+  })
+  const minCost = Math.min(...allCosts)
+  const maxCost = Math.max(...allCosts)
+  const costRange = maxCost - minCost || 1
+
+  const scored = smallerFittingBoxes.map(box => {
+    const boxVol      = box.length_cm * box.width_cm * box.height_cm
     const utilization = Math.min((productVol / boxVol) * 100, 100)
-    const dimWeight = calcDimWeight(box.length_cm, box.width_cm, box.height_cm)
+    const dimWeight   = calcDimWeight(box.length_cm, box.width_cm, box.height_cm)
     const shippingCost = calcShippingCost(dimWeight, product.weight_kg * product.quantity, product.shipping_zone)
-    const totalCost = box.cost_per_box_usd + shippingCost
-
-    // Composite score: higher utilization = smaller box = better
-    // Lower total cost = better; Higher eco score = better
-    const score = (utilization * 0.55) + ((1 / (totalCost + 0.01)) * 25) + (box.sustainability_score * 0.15)
-
+    const totalCost   = box.cost_per_box_usd + shippingCost
+    const costScore   = ((maxCost - totalCost) / costRange) * 100
+    const score = (utilization * 0.55) + (costScore * 0.30) + (box.sustainability_score * 0.15)
     return { box, utilization, dimWeight, shippingCost, totalCost, score }
-  }).sort((a, b) => b.score - a.score)
+  }).sort((a, b) => {
+    if (Math.abs(b.score - a.score) > 0.1) return b.score - a.score
+    return (a.box.length_cm * a.box.width_cm * a.box.height_cm) -
+           (b.box.length_cm * b.box.width_cm * b.box.height_cm)
+  })
 
   const best = scored[0]
+  const bestBoxVol = best.box.length_cm * best.box.width_cm * best.box.height_cm
   const bestBoxDims = `${best.box.length_cm}×${best.box.width_cm}×${best.box.height_cm}`
   const optimizedTotalCost = best.totalCost
   const savings = parseFloat(Math.max(0, originalTotalCost - optimizedTotalCost).toFixed(2))
 
-  // Determine fit status
+  if (bestBoxVol >= originalBoxVol) {
+    return {
+      row_index: product.row_index,
+      product_name: product.product_name,
+      original_box_dimensions: originalBoxDims,
+      original_box_price: product.used_box_price,
+      optimized_box_dimensions: originalBoxDims,
+      optimized_box_price: product.used_box_price,
+      recommended_box_id: null,
+      recommended_box_name: 'Same Box',
+      shipping_zone: product.shipping_zone,
+      savings: 0,
+      fit_status: 'same_box',
+      optimization_reason: `No smaller box available. Current box is optimal.`,
+      utilization_pct: 0,
+      dimensional_weight_kg: originalDimWeight,
+      sustainability_score: 0,
+      parsed_product: product,
+      recommended_box: null,
+    }
+  }
+
+  // FIX 3: same_box tolerance comparison (0.1cm)
+  const TOLERANCE = 0.1
   const isSameBox =
-    best.box.length_cm === product.used_box_length &&
-    best.box.width_cm === product.used_box_width &&
-    best.box.height_cm === product.used_box_height
+    Math.abs(best.box.length_cm - product.used_box_length) < TOLERANCE &&
+    Math.abs(best.box.width_cm  - product.used_box_width)  < TOLERANCE &&
+    Math.abs(best.box.height_cm - product.used_box_height) < TOLERANCE
 
   const fitStatus: FitStatus = isSameBox ? 'same_box' : 'optimized'
-
-  // Build human-readable reason
+  const volReductionPct = Math.round((1 - bestBoxVol / originalBoxVol) * 100)
   let reason: string
   if (fitStatus === 'optimized') {
-    const volReduction = Math.round((1 - (best.box.length_cm * best.box.width_cm * best.box.height_cm) / originalBoxVol) * 100)
-    reason = `Switched from ${originalBoxDims}cm to ${bestBoxDims}cm — ${volReduction > 0 ? `${volReduction}% smaller volume` : 'comparable size'}, saving $${savings.toFixed(2)} per shipment (box + dimensional weight). Fragility score ${product.fragility_score}/10 — ${fragilityPadding(product.fragility_score)}cm padding applied.`
+    reason = `Switched from ${originalBoxDims}cm (${originalBoxVol}cm³) to ${bestBoxDims}cm (${bestBoxVol}cm³) — ${volReductionPct}% smaller volume, saving $${savings.toFixed(2)} per shipment. Fragility ${product.fragility_score}/10 — ${pad}cm padding.`
   } else {
-    reason = `Current box is already optimal for this product. No smaller valid box exists in catalog with required ${minL.toFixed(1)}×${minW.toFixed(1)}×${minH.toFixed(1)}cm minimum.`
+    reason = `Current box is already optimal. Tolerance match with ${bestBoxDims}cm (${bestBoxVol}cm³).`
   }
 
   return {
@@ -168,7 +245,7 @@ export function selectOptimalBox(
     recommended_box_id: best.box.id,
     recommended_box_name: best.box.box_name,
     shipping_zone: product.shipping_zone,
-    savings,
+    savings: fitStatus === 'same_box' ? 0 : savings,
     fit_status: fitStatus,
     optimization_reason: reason,
     utilization_pct: parseFloat(best.utilization.toFixed(1)),
@@ -203,7 +280,7 @@ export async function bulkOptimize(
   const results: OptimizationResult[] = []
   const invalidRows: BulkResult['invalidRows'] = []
 
-  const CHUNK = 200  // process in chunks to avoid blocking the main thread
+  const CHUNK = 200
 
   for (let i = 0; i < rawRows.length; i += CHUNK) {
     const chunk = rawRows.slice(i, i + CHUNK)
@@ -223,7 +300,6 @@ export async function bulkOptimize(
         const result = selectOptimalBox(validation.row, catalog)
         results.push(result)
       } catch (err) {
-        // One bad row must never break the batch
         invalidRows.push({
           rowIndex,
           errors: [err instanceof Error ? err.message : 'Unknown processing error'],
@@ -231,7 +307,6 @@ export async function bulkOptimize(
       }
     }
 
-    // Yield to event loop between chunks so UI stays responsive
     if (i + CHUNK < rawRows.length) {
       await new Promise(r => setTimeout(r, 0))
     }

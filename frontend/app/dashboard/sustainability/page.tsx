@@ -88,9 +88,8 @@ export default function SustainabilityPage() {
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name: name.replace('_', ' '), value }))
 
-  const trendData = metrics.length
-    ? metrics.map(m => ({ date: m.metric_date?.slice(5), score: Math.round(m.sustainability_score ?? 0), carbon: Math.round(m.carbon_reduction_kg ?? 0) }))
-    : Array.from({ length: 8 }, (_, i) => ({ date: `W${i + 1}`, score: 45 + i * 5, carbon: i * 12 }))
+  // BUG-009 FIX: No fake data — use only real metrics from the database
+  const trendData = metrics.map(m => ({ date: m.metric_date?.slice(5), score: Math.round(m.sustainability_score ?? 0), carbon: Math.round(m.carbon_reduction_kg ?? 0) }))
 
   const MILESTONES = [
     { label: 'First 10 Optimizations', done: totalOrders >= 10, icon: '📦' },
@@ -128,21 +127,25 @@ export default function SustainabilityPage() {
       {/* Trend Chart */}
       <div className="glass-card p-6">
         <h3 className="font-syne font-semibold text-white mb-5">Sustainability Score Trend</h3>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={trendData}>
-            <defs>
-              <linearGradient id="ecoGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E2533" />
-            <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} />
-            <YAxis tick={{ fill: '#475569', fontSize: 11 }} domain={[0, 100]} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="score" stroke="#10B981" fill="url(#ecoGrad)" strokeWidth={2} name="eco score" isAnimationActive />
-          </AreaChart>
-        </ResponsiveContainer>
+        {trendData.length === 0 ? (
+          <div className="h-48 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>No sustainability data yet — run optimizations to generate data.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={trendData}>
+              <defs>
+                <linearGradient id="ecoGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E2533" />
+              <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#475569', fontSize: 11 }} domain={[0, 100]} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="score" stroke="#10B981" fill="url(#ecoGrad)" strokeWidth={2} name="eco score" isAnimationActive />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

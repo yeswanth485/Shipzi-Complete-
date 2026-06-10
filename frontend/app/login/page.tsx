@@ -10,13 +10,7 @@ import {
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
-
-function setAuthCookie(uid: string) {
-  document.cookie = `shipzi-auth=${uid}; path=/; max-age=86400; SameSite=Lax`
-}
-function setOnboardingCookie() {
-  document.cookie = `shipzi-onboarding-complete=true; path=/; max-age=31536000; SameSite=Lax`
-}
+import { setAuthCookie, setOnboardingComplete } from '@/lib/auth-cookies'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -35,7 +29,7 @@ export default function LoginPage() {
       .eq('id', uid)
       .single()
     if (data?.onboarding_complete) {
-      setOnboardingCookie()
+      setOnboardingComplete()
       router.push('/dashboard')
     } else {
       router.push('/onboarding')
