@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Papa from 'papaparse'
 import { supabase } from '@/lib/supabase'
@@ -144,20 +144,24 @@ export default function OptimizePage() {
     a.click()
   }
 
-  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 3000): Promise<Response> => {
+  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 5000): Promise<Response> => {
+    let lastError: Error | null = null
     for (let i = 0; i < retries; i++) {
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 min timeout
+        const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 min timeout for Render cold start
         const response = await fetch(url, { ...options, signal: controller.signal })
         clearTimeout(timeoutId)
         return response
       } catch (err) {
-        if (i === retries - 1) throw err
-        await new Promise(r => setTimeout(r, delay))
+        lastError = err instanceof Error ? err : new Error(String(err))
+        if (i < retries - 1) {
+          console.warn(`Retry ${i + 1}/${retries} for ${url}: ${lastError.message}`)
+          await new Promise(r => setTimeout(r, delay))
+        }
       }
     }
-    throw new Error('Max retries reached')
+    throw lastError || new Error('Max retries reached')
   }
 
   const runOptimization = async () => {
@@ -170,16 +174,23 @@ export default function OptimizePage() {
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL
       if (!backendUrl) {
-        throw new Error('Backend URL not configured. Set NEXT_PUBLIC_BACKEND_API_URL in Vercel environment variables.')
+        throw new Error(
+          'Backend URL not configured. Set NEXT_PUBLIC_BACKEND_API_URL in your Vercel environment variables to your Render backend URL (e.g. https://your-app.onrender.com).'
+        )
       }
 
       // Step 0 — Wake up backend (Render free tier sleeps after inactivity)
       setCurrentStep(0)
-      setErrorMessage('Connecting to backend (may take 30s if server was sleeping)...')
+      setErrorMessage('Connecting to backend (may take 30–60s if server was sleeping)...')
       try {
-        await fetchWithRetry(`${backendUrl}/health`, { method: 'GET' }, 3, 5000)
-      } catch {
-        throw new Error(`Cannot reach backend at ${backendUrl}. Make sure the backend is deployed and running on Render.`)
+        const healthResp = await fetchWithRetry(`${backendUrl}/health`, { method: 'GET' }, 3, 10000)
+        const healthData = await healthResp.json().catch(() => null)
+        console.log('[OPTIMIZE] Backend health:', healthData)
+      } catch (healthErr) {
+        const msg = healthErr instanceof Error ? healthErr.message : String(healthErr)
+        throw new Error(
+          `Cannot reach backend at ${backendUrl}.\n\nPossible causes:\n• Backend is not deployed or is sleeping (Render free tier)\n• CORS is blocking this request\n• Network error: ${msg}\n\nCheck your Render backend logs and ensure the URL is correct (no trailing slash).`
+        )
       }
       setErrorMessage('')
 
@@ -197,39 +208,47 @@ export default function OptimizePage() {
         .select('id')
         .single()
 
-      if (runError || !runData) throw new Error(`Failed to create run: ${runError?.message ?? 'Unknown error'}`)
+      if (runError || !runData) {
+        throw new Error(`Failed to create optimization run in database: ${runError?.message ?? 'No data returned'}. Check that the optimization_runs table exists and your user has INSERT permission.`)
+      }
       const currentRunId = runData.id as string
       setRunId(currentRunId)
 
       // Step 2 — Send to backend API
       setCurrentStep(2)
+      console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to ${backendUrl}/api/optimize`)
+
       const response = await fetchWithRetry(`${backendUrl}/api/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawRows,
           companyId,
-          runId: currentRunId
-        })
-      }, 3, 5000);
+          runId: currentRunId,
+        }),
+      }, 3, 5000)
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Backend optimization failed with status ${response.status}`);
+        const errData = await response.json().catch(() => ({}))
+        const errMsg = errData.error || `Backend returned HTTP ${response.status}`
+        throw new Error(`Optimization failed: ${errMsg}`)
       }
 
       setCurrentStep(5)
-      const { result } = await response.json();
-      setProcessedRows(rawRows.length);
+      const { result } = await response.json()
+      setProcessedRows(rawRows.length)
 
       setBulkResult(result)
       setStatus('complete')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'
+      console.error('[OPTIMIZE] Error:', msg)
       setErrorMessage(msg)
       setStatus('error')
       if (runId) {
-        await supabase.from('optimization_runs').update({ status: 'failed' }).eq('id', runId)
+        try {
+          await supabase.from('optimization_runs').update({ status: 'failed' }).eq('id', runId)
+        } catch { /* ignore */ }
       }
     }
   }
@@ -286,10 +305,10 @@ export default function OptimizePage() {
             </div>
 
             {errorMessage && (
-              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl text-xs"
+              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl text-xs whitespace-pre-line"
                 style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--accent-danger)' }}>
                 <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                {errorMessage}
+                <span>{errorMessage}</span>
               </div>
             )}
           </div>
@@ -449,7 +468,7 @@ export default function OptimizePage() {
             <div className="glass-card p-8 flex flex-col items-center text-center" style={{ minHeight: 300 }}>
               <AlertCircle size={40} color="var(--accent-danger)" className="mb-4" />
               <h3 className="font-syne text-xl font-bold text-white mb-2">Optimization Failed</h3>
-              <p className="text-sm mb-4 max-w-md" style={{ color: 'var(--text-secondary)' }}>{errorMessage}</p>
+              <p className="text-sm mb-4 max-w-md whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>{errorMessage}</p>
               {errorMessage.includes('NEXT_PUBLIC_BACKEND_API_URL') && (
                 <div className="text-xs p-4 rounded-xl max-w-md text-left mb-4"
                   style={{ background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.3)', color: 'var(--text-secondary)' }}>
@@ -467,13 +486,15 @@ export default function OptimizePage() {
                   style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--text-secondary)' }}>
                   <p className="font-semibold mb-2" style={{ color: 'var(--accent-warning)' }}>Backend not reachable:</p>
                   <ol className="list-decimal list-inside space-y-1">
-                    <li>Check your Render backend is deployed and active</li>
+                    <li>Check your Render backend is deployed and active (not sleeping)</li>
                     <li>Verify the URL is correct (no trailing slash)</li>
-                    <li>Check Render logs for errors</li>
+                    <li>Check Render logs for startup errors</li>
+                    <li>Verify CORS is not blocking this request</li>
+                    <li>Render free tier sleeps after 15 min — first request takes 30–60s</li>
                   </ol>
                 </div>
               )}
-              <button onClick={() => setStatus('idle')} className="btn-ghost">Try Again</button>
+              <button onClick={() => { setStatus('idle'); setErrorMessage('') }} className="btn-ghost">Try Again</button>
             </div>
           )}
 
@@ -534,8 +555,8 @@ export default function OptimizePage() {
                     </thead>
                     <tbody>
                       {bulkResult.results.map((r, i) => (
-                        <>
-                          <tr key={r.row_index}
+                        <Fragment key={r.row_index}>
+                          <tr
                             onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                             className="cursor-pointer transition-colors"
                             style={{
@@ -612,7 +633,7 @@ export default function OptimizePage() {
                               </tr>
                             )}
                           </AnimatePresence>
-                        </>
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -638,3 +659,4 @@ export default function OptimizePage() {
     </div>
   )
 }
+
