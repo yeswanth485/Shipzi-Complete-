@@ -6,6 +6,36 @@ import type { CatalogBox, OptimizedOrderRow } from './types'
 // We only create a real client when both URL and key are present.
 // Otherwise, we use a plain no-op object that never throws.
 
+// Helper: creates a plain no-op client (no createClient call, no Proxy)
+// Used when env vars are missing during build or when createClient throws
+function createNoopClient() {
+  if (typeof window !== 'undefined') {
+    console.warn('[Shipzi] Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.')
+  }
+  const noop = () => Promise.resolve({ data: null, error: null, count: null })
+  const chainable = () => ({
+    select: noop, insert: noop, update: noop, upsert: noop,
+    delete: noop, eq: noop, order: noop, single: noop, limit: noop,
+  })
+  return {
+    from: chainable,
+    storage: {
+      from: () => ({
+        upload: noop,
+        getPublicUrl: () => ({ data: { publicUrl: '' } }),
+        list: noop,
+        remove: noop,
+      }),
+    },
+    rpc: noop,
+    auth: {
+      signOut: noop,
+      getUser: noop,
+      onAuthStateChanged: () => () => {},
+    },
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let supabase: any
 
@@ -16,36 +46,12 @@ try {
   if (url && key) {
     supabase = createClient(url, key)
   } else {
-    if (typeof window !== 'undefined') {
-      console.warn('[Shipzi] Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.')
-    }
-    // Plain no-op client — no Proxy, no createClient call
-    const noop = () => Promise.resolve({ data: null, error: null, count: null })
-    const chainable = () => ({
-      select: noop, insert: noop, update: noop, upsert: noop,
-      delete: noop, eq: noop, order: noop, single: noop, limit: noop,
-    })
-    supabase = {
-      from: chainable,
-      storage: { from: () => ({ upload: noop, getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
-      rpc: noop,
-      auth: {},
-    }
+    supabase = createNoopClient()
   }
 } catch (e) {
-  // Safety net: if createClient throws, use no-op
+  // Safety net: if createClient throws (e.g. invalid URL), use no-op
   console.warn('[Shipzi] Supabase init failed:', e)
-  const noop = () => Promise.resolve({ data: null, error: null, count: null })
-  const chainable = () => ({
-    select: noop, insert: noop, update: noop, upsert: noop,
-    delete: noop, eq: noop, order: noop, single: noop, limit: noop,
-  })
-  supabase = {
-    from: chainable,
-    storage: { from: () => ({ upload: noop, getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
-    rpc: noop,
-    auth: {},
-  }
+  supabase = createNoopClient()
 }
 
 export { supabase }
