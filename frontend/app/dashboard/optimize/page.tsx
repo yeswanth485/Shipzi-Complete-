@@ -214,21 +214,19 @@ export default function OptimizePage() {
       const currentRunId = runData.id as string
       setRunId(currentRunId)
 
-      // Step 2 — Send to backend API
+      // Step 2 — Send to Render backend API (handles orders, shipments, analytics, sustainability)
       setCurrentStep(2)
       console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to ${backendUrl}/api/optimize`)
 
-      const response = await fetchWithRetry(`/api/optimize/bulk`, {
+      const response = await fetchWithRetry(`${backendUrl}/api/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rows: rawRows,
-          mode: 'single',
-          catalog_id: 'default_catalog',
-          company_id: companyId,
-          run_id: currentRunId,
+          rawRows: rawRows,
+          companyId: companyId,
+          runId: currentRunId,
         }),
-      }, 3, 5000)
+      }, 3, 10000)
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
@@ -240,7 +238,19 @@ export default function OptimizePage() {
       const data = await response.json()
       setProcessedRows(rawRows.length)
 
-      setBulkResult(data)
+      // Transform backend response to match BulkResult format for the UI
+      const backendResult = data.result || data
+      const transformedResult: BulkResult = {
+        results: backendResult.results || [],
+        invalidRows: backendResult.invalidRows || [],
+        summary: backendResult.summary || {
+          total: rawRows.length,
+          optimized: 0,
+          total_savings: 0,
+          avg_utilization: 0,
+        }
+      }
+      setBulkResult(transformedResult)
       setStatus('complete')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'
