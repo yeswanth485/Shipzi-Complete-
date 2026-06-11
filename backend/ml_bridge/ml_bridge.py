@@ -139,6 +139,27 @@ def _predict_single(product):
         "packaging_tip": "HIGH FRAGILITY: bubble wrap + foam corners." if float(product.get('fragility_score', 0)) >= 7 else "Standard packaging."
     }
 
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        "service": "Shipzi ML Bridge",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/ml/health",
+            "single": "POST /ml/single",
+            "multi": "POST /ml/multi",
+            "bulk": "POST /ml/bulk"
+        }
+    }), 200
+
+@app.route('/health', methods=['GET'])
+def health_root():
+    return jsonify({
+        "status": "healthy",
+        "models_loaded": len(models),
+        "version": "1.0.0"
+    }), 200
+
 @app.route('/ml/health', methods=['GET'])
 def health():
     return jsonify({
