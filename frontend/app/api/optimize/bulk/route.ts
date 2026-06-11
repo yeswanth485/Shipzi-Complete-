@@ -71,31 +71,27 @@ export async function POST(req: Request) {
     const chunks = chunkArray(insertRows, 500)
 
     for (const chunk of chunks) {
-      const { error } = await supabase.from('optimization_runs_orders').insert(chunk)
+      const { error } = await supabase.from('optimized_orders').insert(chunk)
       if (error) {
         console.error('Chunk insert error:', error)
       }
     }
 
-    await supabase.from('optimization_runs').insert({
-      id: run_id,
-      company_id,
-      catalog_id,
-      mode,
+    await supabase.from('optimization_runs').update({
       total_rows: bulkResult.summary.total,
       optimized_rows: bulkResult.summary.optimized,
       total_savings_usd: bulkResult.summary.total_savings,
       avg_utilization_pct: bulkResult.summary.avg_utilization,
-      invalid_rows: bulkResult.invalidRows.length,
-      created_at: new Date().toISOString()
-    })
+      invalid_rows: (bulkResult.invalidRows || []).length,
+      status: 'complete'
+    }).eq('id', run_id)
 
     return NextResponse.json({
       success: true,
       run_id,
       summary: bulkResult.summary,
-      invalid_rows: bulkResult.invalidRows,
-      results: bulkResult.results
+      invalidRows: bulkResult.invalidRows || [],
+      results: bulkResult.results || []
     })
   } catch (error: any) {
     console.error('Optimization error:', error)

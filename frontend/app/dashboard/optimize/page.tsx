@@ -118,7 +118,7 @@ export default function OptimizePage() {
   }
 
   const downloadResultsCSV = () => {
-    if (!bulkResult) return
+    if (!bulkResult?.results?.length) return
     const header = [
       'product_name','original_box_dimensions','optimized_box_dimensions',
       'original_box_price','optimized_box_price','shipping_zone',
@@ -507,10 +507,10 @@ export default function OptimizePage() {
               {/* Summary Cards */}
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'Total Rows',    value: bulkResult.summary.total.toLocaleString(),     color: 'var(--text-primary)' },
-                  { label: 'Optimized',     value: bulkResult.summary.optimized.toLocaleString(), color: 'var(--accent-success)' },
-                  { label: 'Total Savings', value: `$${bulkResult.summary.total_savings.toFixed(2)}`, color: 'var(--accent-success)' },
-                  { label: 'Avg Utilization', value: `${bulkResult.summary.avg_utilization}%`,    color: 'var(--accent-primary)' },
+                  { label: 'Total Rows',    value: (bulkResult.summary?.total ?? 0).toLocaleString(),     color: 'var(--text-primary)' },
+                  { label: 'Optimized',     value: (bulkResult.summary?.optimized ?? 0).toLocaleString(), color: 'var(--accent-success)' },
+                  { label: 'Total Savings', value: `$${(bulkResult.summary?.total_savings ?? 0).toFixed(2)}`, color: 'var(--accent-success)' },
+                  { label: 'Avg Utilization', value: `${bulkResult.summary?.avg_utilization ?? 0}%`,    color: 'var(--accent-primary)' },
                 ].map(m => (
                   <div key={m.label} className="glass-card p-4 text-center">
                     <div className="font-syne font-bold text-lg" style={{ color: m.color }}>{m.value}</div>
@@ -520,13 +520,13 @@ export default function OptimizePage() {
               </div>
 
               {/* Invalid rows warning */}
-              {bulkResult.invalidRows.length > 0 && (
+              {(bulkResult.invalidRows?.length ?? 0) > 0 && (
                 <div className="flex items-start gap-3 p-4 rounded-xl"
                   style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
                   <AlertCircle size={16} color="var(--accent-warning)" className="flex-shrink-0 mt-0.5" />
                   <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <span className="font-semibold" style={{ color: 'var(--accent-warning)' }}>
-                      {bulkResult.invalidRows.length} rows skipped
+                      {(bulkResult.invalidRows?.length ?? 0)} rows skipped
                     </span>
                     {' '}due to validation errors (missing fields or invalid dimensions). These rows were not processed. Fix the source data and re-upload.
                   </div>
@@ -537,7 +537,7 @@ export default function OptimizePage() {
               <div className="glass-card overflow-hidden">
                 <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
                   <h3 className="font-syne font-semibold text-white text-sm">
-                    Results — {bulkResult.results.length.toLocaleString()} rows optimized
+                    Results — {(bulkResult.results?.length ?? 0).toLocaleString()} rows optimized
                   </h3>
                   <div className="flex gap-2">
                     <button onClick={downloadResultsCSV} className="btn-ghost flex items-center gap-1.5" style={{ fontSize: 12, padding: '6px 12px' }}>
@@ -556,7 +556,7 @@ export default function OptimizePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bulkResult.results.map((r, i) => (
+                      {(bulkResult.results ?? []).map((r, i) => (
                         <Fragment key={r.row_index}>
                           <tr
                             onClick={() => setExpandedRow(expandedRow === i ? null : i)}
@@ -647,7 +647,7 @@ export default function OptimizePage() {
                 <div>
                   <p className="font-semibold text-white text-sm">Results saved to Orders tab</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    All {bulkResult.results.length} rows are now in your Orders dashboard
+                    All {(bulkResult.results?.length ?? 0)} rows are now in your Orders dashboard
                   </p>
                 </div>
                 <a href="/dashboard/orders" className="btn-primary" style={{ padding: '8px 18px', fontSize: 13, textDecoration: 'none' }}>
