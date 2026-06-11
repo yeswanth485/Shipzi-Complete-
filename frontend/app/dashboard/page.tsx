@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { useInView } from 'framer-motion'   // ← correct import
+import { useInView } from 'framer-motion'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -12,7 +12,7 @@ import { Package, TrendingUp, DollarSign, Leaf, Wind, Target } from 'lucide-reac
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
 import type { AnalyticsSnapshotRow, ShipmentRow } from '@/lib/supabase'
-import type { OptimizedOrderRow } from '@/lib/types'
+import type { OptimizedOrderRow, CatalogBox } from '@/lib/types'
 
 const COLORS = ['#2563EB', '#06B6D4', '#10B981', '#F59E0B', '#8B5CF6']
 
@@ -93,15 +93,16 @@ export default function DashboardPage() {
   const [orders,    setOrders]    = useState<OptimizedOrderRow[]>([])
   const [shipments, setShipments] = useState<ShipmentRow[]>([])
   const [snapshots, setSnapshots] = useState<AnalyticsSnapshotRow[]>([])
+  const [boxCatalog, setBoxCatalog] = useState<CatalogBox[]>([])
   const [loading,   setLoading]   = useState(true)
 
   useEffect(() => {
     if (!companyId) return
     ;(async () => {
       try {
-        const [{ data: ord, error: ordErr }, { data: ship, error: shipErr }, { data: snap, error: snapErr }] = await Promise.all([
+        const [{ data: ord, error: ordErr }, { data: ship, error: shipErr }, { data: snap, error: snapErr }, { data: boxes, error: boxErr }] = await Promise.all([
           supabase.from('optimized_orders')
-            .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status')
+            .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status,recommended_box_id')
             .eq('company_id', companyId)
             .order('created_at', { ascending: false })
             .limit(500),
@@ -115,15 +116,20 @@ export default function DashboardPage() {
             .eq('company_id', companyId)
             .order('snapshot_date', { ascending: true })
             .limit(30),
+          supabase.from('box_catalog')
+            .select('id, box_name')
+            .eq('company_id', companyId),
         ])
         
         if (ordErr) console.error("Orders fetch error:", ordErr)
         if (shipErr) console.error("Shipments fetch error:", shipErr)
         if (snapErr) console.error("Snapshots fetch error:", snapErr)
+        if (boxErr) console.error("Box catalog fetch error:", boxErr)
 
         setOrders((ord as OptimizedOrderRow[]) ?? [])
         setShipments((ship as ShipmentRow[]) ?? [])
         setSnapshots((snap as AnalyticsSnapshotRow[]) ?? [])
+        setBoxCatalog((boxes as CatalogBox[]) ?? [])
       } catch (err) {
         console.error("Dashboard fetch exception:", err)
       } finally {
@@ -143,6 +149,13 @@ export default function DashboardPage() {
     : 0
   const carbonKg = Math.round(totalSavings * 0.42)
 
+  // Build a lookup map: box_id → box_name (useMemo ensures it updates on same render)
+  const boxNameMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    boxCatalog.forEach(b => { map[b.id] = b.box_name })
+    return map
+  }, [boxCatalog])
+
   // Chart data
   const savingsData = snapshots.map(s => ({
     date: s.snapshot_date?.slice(5) ?? '',
@@ -150,28 +163,42 @@ export default function DashboardPage() {
     shipments: s.total_shipments ?? 0,
   }))
 
+  // Shipments last 7 days — combine shipments table + orders as fallback
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (6 - i))
     const key = d.toISOString().slice(0, 10)
     const label = d.toLocaleDateString('en-US', { weekday: 'short' })
-    const count = shipments.filter(s => s.created_at?.slice(0, 10) === key).length
-    return { label, count: count || 0 }
+    // Count from shipments table (populated by backend)
+    const shipCount = shipments.filter(s => s.created_at?.slice(0, 10) === key).length
+    // Fallback: also count orders created on this date
+    const orderCount = orders.filter(o => o.created_at?.slice(0, 10) === key).length
+    return { label, count: Math.max(shipCount, orderCount) }
   })
 
-  // BUG-008 FIX: Compute box usage from actual order data instead of hardcoded values
+  // Box Usage Mix — resolve box names from recommended_box_id via catalog lookup
   const boxUsage = (() => {
     const counts: Record<string, number> = {}
     orders.forEach(o => {
-      const name = (o as any).recommended_box?.box_name ?? (o as any).recommended_box_name ?? 'Unknown'
-      if (name && name !== 'No fit found' && name !== 'Same Box') {
+      // Try the joined box catalog first, then the local lookup map, then fallback names
+      const boxId = o.recommended_box_id
+      const name = boxId ? (boxNameMap[boxId] ?? 'Unknown Box') : 'Unknown Box'
+      if (name && name !== 'No fit found' && name !== 'Same Box' && name !== 'Unknown Box') {
         counts[name] = (counts[name] ?? 0) + 1
       }
     })
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    if (sorted.length === 0) return [
-      { name: 'No data yet', value: 1 },
-    ]
+    if (sorted.length === 0) {
+      // Fallback: show fit_status distribution instead
+      const statusCounts: Record<string, number> = {}
+      orders.forEach(o => {
+        const status = (o.fit_status ?? 'pending').replace('_', ' ')
+        statusCounts[status] = (statusCounts[status] ?? 0) + 1
+      })
+      const sortedStatus = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+      if (sortedStatus.length === 0) return [{ name: 'No data yet', value: 1 }]
+      return sortedStatus.map(([name, value]) => ({ name, value }))
+    }
     return sorted.map(([name, value]) => ({ name, value }))
   })()
 

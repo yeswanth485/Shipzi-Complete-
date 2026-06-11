@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
+import type { CatalogBox } from '@/lib/types'
 
 interface SustainMetric {
   metric_date: string
@@ -15,7 +16,8 @@ interface SustainMetric {
 interface OrderRow {
   sustainability_score: number
   savings_usd: number
-  recommended_box: { material_type: string } | null
+  created_at: string
+  recommended_box_id: string | null
 }
 
 const MATERIAL_COLORS: Record<string, string> = { corrugated: '#D4A437', kraft: '#A0783C', rigid: '#6B7280', poly_mailer: '#8B5CF6' }
@@ -54,20 +56,24 @@ export default function SustainabilityPage() {
   const { companyId, isLoading: isUserLoading } = useUser()
   const [metrics, setMetrics] = useState<SustainMetric[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
+  const [boxCatalog, setBoxCatalog] = useState<CatalogBox[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!companyId) return
     ;(async () => {
       try {
-        const [{ data: m, error: mErr }, { data: o, error: oErr }] = await Promise.all([
+        const [{ data: m, error: mErr }, { data: o, error: oErr }, { data: boxes, error: boxErr }] = await Promise.all([
           supabase.from('sustainability_metrics').select('*').eq('company_id', companyId).order('metric_date'),
-          supabase.from('optimized_orders').select('sustainability_score, savings_usd, recommended_box:box_catalog(material_type)').eq('company_id', companyId),
+          supabase.from('optimized_orders').select('sustainability_score, savings_usd, created_at, recommended_box_id').eq('company_id', companyId).order('created_at', { ascending: true }),
+          supabase.from('box_catalog').select('id, material_type').eq('company_id', companyId),
         ])
         if (mErr) console.error("Sustainability metrics fetch error:", mErr)
         if (oErr) console.error("Orders fetch error:", oErr)
+        if (boxErr) console.error("Box catalog fetch error:", boxErr)
         setMetrics((m as unknown as SustainMetric[]) ?? [])
         setOrders((o as unknown as OrderRow[]) ?? [])
+        setBoxCatalog((boxes as unknown as CatalogBox[]) ?? [])
       } catch (err) {
         console.error("Sustainability fetch exception:", err)
       } finally {
@@ -76,20 +82,47 @@ export default function SustainabilityPage() {
     })()
   }, [companyId])
 
+  // Build a lookup map: box_id → material_type
+  const boxMaterialMap: Record<string, string> = {}
+  boxCatalog.forEach(b => { boxMaterialMap[b.id] = b.material_type })
+
   const avgScore = orders.length ? Math.round(orders.reduce((s, o) => s + (o.sustainability_score ?? 0), 0) / orders.length) : 0
   const totalCarbon = Math.round(orders.reduce((s, o) => s + (o.savings_usd ?? 0), 0) * 0.42)
   const totalOrders = orders.length
 
   const materialCounts = Object.entries(
     orders.reduce((acc, o) => {
-      const mat = o.recommended_box?.material_type ?? 'unknown'
+      const mat = o.recommended_box_id ? (boxMaterialMap[o.recommended_box_id] ?? 'unknown') : 'unknown'
       acc[mat] = (acc[mat] ?? 0) + 1
       return acc
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name: name.replace('_', ' '), value }))
 
-  // BUG-009 FIX: No fake data — use only real metrics from the database
-  const trendData = metrics.map(m => ({ date: m.metric_date?.slice(5), score: Math.round(m.sustainability_score ?? 0), carbon: Math.round(m.carbon_reduction_kg ?? 0) }))
+  // Sustainability trend: use sustainability_metrics if available, otherwise compute from orders grouped by date
+  const metricsTrend = metrics.map(m => ({ date: m.metric_date?.slice(5), score: Math.round(m.sustainability_score ?? 0), carbon: Math.round(m.carbon_reduction_kg ?? 0) }))
+
+  // Fallback: if no sustainability_metrics, group orders by date and compute daily averages
+  const ordersTrend = (() => {
+    if (orders.length === 0) return []
+    const byDate: Record<string, { totalScore: number; totalCarbon: number; count: number }> = {}
+    orders.forEach(o => {
+      const dateKey = o.created_at?.slice(0, 10) ?? ''
+      if (!dateKey) return
+      if (!byDate[dateKey]) byDate[dateKey] = { totalScore: 0, totalCarbon: 0, count: 0 }
+      byDate[dateKey].totalScore += (o.sustainability_score ?? 0)
+      byDate[dateKey].totalCarbon += (o.savings_usd ?? 0) * 0.15
+      byDate[dateKey].count += 1
+    })
+    return Object.entries(byDate)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, v]) => ({
+        date: date.slice(5),
+        score: Math.round(v.totalScore / v.count),
+        carbon: Math.round(v.totalCarbon),
+      }))
+  })()
+
+  const trendData = metricsTrend.length > 0 ? metricsTrend : ordersTrend
 
   const MILESTONES = [
     { label: 'First 10 Optimizations', done: totalOrders >= 10, icon: '📦' },
