@@ -4,3 +4,4 @@ scikit-learn==1.2.2
 xgboost==1.7.5
 pandas==2.0.2
 joblib==1.2.0
+gunicorn==21.2.0
