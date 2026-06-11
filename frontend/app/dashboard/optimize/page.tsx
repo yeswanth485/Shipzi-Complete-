@@ -172,28 +172,6 @@ export default function OptimizePage() {
     setErrorMessage('')
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL
-      if (!backendUrl) {
-        throw new Error(
-          'Backend URL not configured. Set NEXT_PUBLIC_BACKEND_API_URL in your Vercel environment variables to your Render backend URL (e.g. https://your-app.onrender.com).'
-        )
-      }
-
-      // Step 0 — Wake up backend (Render free tier sleeps after inactivity)
-      setCurrentStep(0)
-      setErrorMessage('Connecting to backend (may take 30–60s if server was sleeping)...')
-      try {
-        const healthResp = await fetchWithRetry(`${backendUrl}/health`, { method: 'GET' }, 3, 10000)
-        const healthData = await healthResp.json().catch(() => null)
-        console.log('[OPTIMIZE] Backend health:', healthData)
-      } catch (healthErr) {
-        const msg = healthErr instanceof Error ? healthErr.message : String(healthErr)
-        throw new Error(
-          `Cannot reach backend at ${backendUrl}.\n\nPossible causes:\n• Backend is not deployed or is sleeping (Render free tier)\n• CORS is blocking this request\n• Network error: ${msg}\n\nCheck your Render backend logs and ensure the URL is correct (no trailing slash).`
-        )
-      }
-      setErrorMessage('')
-
       // Step 1 — Create optimization run record
       setCurrentStep(1)
       const { data: runData, error: runError } = await supabase
@@ -209,28 +187,30 @@ export default function OptimizePage() {
         .single()
 
       if (runError || !runData) {
-        throw new Error(`Failed to create optimization run in database: ${runError?.message ?? 'No data returned'}. Check that the optimization_runs table exists and your user has INSERT permission.`)
+        throw new Error(`Failed to create optimization run: ${runError?.message ?? 'No data returned'}`)
       }
       const currentRunId = runData.id as string
       setRunId(currentRunId)
 
-      // Step 2 — Send to Render backend API (handles orders, shipments, analytics, sustainability)
+      // Step 2 — Send to Next.js API route (handles orders, shipments, analytics, sustainability)
       setCurrentStep(2)
-      console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to ${backendUrl}/api/optimize`)
+      console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to /api/optimize/bulk`)
 
-      const response = await fetchWithRetry(`${backendUrl}/api/optimize`, {
+      const response = await fetchWithRetry(`/api/optimize/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawRows: rawRows,
-          companyId: companyId,
-          runId: currentRunId,
+          rows: rawRows,
+          mode: 'single',
+          catalog_id: 'default_catalog',
+          company_id: companyId,
+          run_id: currentRunId,
         }),
-      }, 3, 10000)
+      }, 3, 5000)
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
-        const errMsg = errData.error || `Backend returned HTTP ${response.status}`
+        const errMsg = errData.error || errData.message || `HTTP ${response.status}`
         throw new Error(`Optimization failed: ${errMsg}`)
       }
 
@@ -238,19 +218,7 @@ export default function OptimizePage() {
       const data = await response.json()
       setProcessedRows(rawRows.length)
 
-      // Transform backend response to match BulkResult format for the UI
-      const backendResult = data.result || data
-      const transformedResult: BulkResult = {
-        results: backendResult.results || [],
-        invalidRows: backendResult.invalidRows || [],
-        summary: backendResult.summary || {
-          total: rawRows.length,
-          optimized: 0,
-          total_savings: 0,
-          avg_utilization: 0,
-        }
-      }
-      setBulkResult(transformedResult)
+      setBulkResult(data)
       setStatus('complete')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'
