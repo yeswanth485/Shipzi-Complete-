@@ -12,26 +12,50 @@ function createNoopClient() {
   if (typeof window !== 'undefined') {
     console.warn('[Shipzi] Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.')
   }
-  const noop = () => Promise.resolve({ data: null, error: null, count: null })
-  const chainable = () => ({
-    select: noop, insert: noop, update: noop, upsert: noop,
-    delete: noop, eq: noop, order: noop, single: noop, limit: noop,
-  })
+  const NOOP_RESULT = { data: null, error: null, count: null }
+
+  // Proxy-based chainable: any method call returns itself (for chaining)
+  // and it's thenable so `await supabase.from('x').select().eq(...)` resolves to NOOP_RESULT
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function makeChainable(): any {
+    return new Proxy(function () {}, {
+      get(_target, prop) {
+        if (prop === 'then') {
+          // Make the chainable thenable so `await` resolves to NOOP_RESULT
+          return (resolve: (v: unknown) => void) => resolve(NOOP_RESULT)
+        }
+        if (prop === Symbol.toPrimitive) return () => ''
+        if (prop === Symbol.iterator) return undefined
+        // Any method call returns another chainable for further chaining
+        return (..._args: unknown[]) => makeChainable()
+      },
+      apply(_target, _thisArg, _args) {
+        return makeChainable()
+      },
+    })
+  }
+
   return {
-    from: chainable,
+    from: (_table?: string) => makeChainable(),
+    channel: (_name?: string) => ({
+      on: (_event?: string, _filter?: object, _callback?: Function) => ({
+        subscribe: () => ({}),
+      }),
+    }),
+    removeChannel: (_channel?: unknown) => Promise.resolve({ error: null }),
     storage: {
-      from: () => ({
-        upload: noop,
-        getPublicUrl: () => ({ data: { publicUrl: '' } }),
-        list: noop,
-        remove: noop,
+      from: (_bucket?: string) => ({
+        upload: (_path?: string, _file?: unknown, _opts?: object) => Promise.resolve({ data: null, error: null }),
+        getPublicUrl: (_path?: string) => ({ data: { publicUrl: '' } }),
+        list: (_prefix?: string) => Promise.resolve({ data: [], error: null }),
+        remove: (_paths?: string[]) => Promise.resolve({ data: null, error: null }),
       }),
     },
-    rpc: noop,
+    rpc: (_fn?: string, _params?: object) => Promise.resolve({ data: null, error: null, count: null }),
     auth: {
-      signOut: noop,
-      getUser: noop,
-      onAuthStateChanged: () => () => {},
+      signOut: () => Promise.resolve({ error: null }),
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      onAuthStateChanged: (_cb?: Function) => () => {},
     },
   }
 }

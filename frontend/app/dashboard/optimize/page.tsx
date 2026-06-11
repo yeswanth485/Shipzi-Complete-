@@ -218,13 +218,15 @@ export default function OptimizePage() {
       setCurrentStep(2)
       console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to ${backendUrl}/api/optimize`)
 
-      const response = await fetchWithRetry(`${backendUrl}/api/optimize`, {
+      const response = await fetchWithRetry(`/api/optimize/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawRows,
-          companyId,
-          runId: currentRunId,
+          rows: rawRows,
+          mode: 'single',
+          catalog_id: 'default_catalog',
+          company_id: companyId,
+          run_id: currentRunId,
         }),
       }, 3, 5000)
 
@@ -235,10 +237,10 @@ export default function OptimizePage() {
       }
 
       setCurrentStep(5)
-      const { result } = await response.json()
+      const data = await response.json()
       setProcessedRows(rawRows.length)
 
-      setBulkResult(result)
+      setBulkResult(data)
       setStatus('complete')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'

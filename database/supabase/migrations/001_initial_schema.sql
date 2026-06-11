@@ -181,9 +181,9 @@ CREATE POLICY "Public reads for company logos"
 ON storage.objects FOR SELECT TO public
 USING (bucket_id = 'company-logos');
 
--- Allow public users to upload their own logos
-CREATE POLICY "Public users can upload logos" 
-ON storage.objects FOR INSERT TO public
+-- Allow authenticated users to upload their own logos
+CREATE POLICY "Authenticated users can upload logos" 
+ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (bucket_id = 'company-logos');
 
 -- Allow public users to update logos

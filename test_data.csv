@@ -1,0 +1,11 @@
+product_name,product_length,product_width,product_height,used_box_length,used_box_width,used_box_height,fragility_score,used_box_price,shipping_zone
+Wireless Earbuds,12,8,6,20,15,10,8,1.40,Zone 2
+Phone Case,18,10,3,25,20,12,2,0.85,Zone 1
+Smart Watch,14,12,7,30,20,15,6,2.20,Zone 3
+LED Light Strip,50,5,3,55,10,8,1,1.80,Zone 4
+Ceramic Mug,10,10,12,25,20,20,9,2.20,Zone 2
+Gaming Mouse,15,8,5,25,18,12,4,1.10,Zone 3
+Bluetooth Speaker,20,15,10,35,25,20,5,2.50,Zone 1
+USB-C Cable,20,1,1,25,5,3,1,0.40,Zone 2
+Yoga Mat,60,15,15,65,18,18,3,3.00,Zone 4
+Protein Shaker,10,10,25,15,15,30,3,1.80,Zone 2

@@ -1,5 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.checkMLBridge = checkMLBridge;
+exports.mlEnhance = mlEnhance;
 exports.validateCSVRow = validateCSVRow;
 exports.selectOptimalBox = selectOptimalBox;
 exports.bulkOptimize = bulkOptimize;
@@ -10,6 +12,42 @@ exports.chunkArray = chunkArray;
 // Handles 2,000–10,000 CSV rows safely
 // =============================================
 const types_1 = require("./types");
+const ML_API_URL = process.env.NEXT_PUBLIC_ML_BRIDGE_URL ?? 'http://localhost:5001';
+const ML_ENABLED = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false';
+async function checkMLBridge() {
+    if (!ML_ENABLED)
+        return false;
+    try {
+        const res = await fetch(`${ML_API_URL}/ml/health`, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+            console.log('ML bridge connected ✅');
+            return true;
+        }
+    }
+    catch (err) {
+        // offline
+    }
+    console.log('ML bridge offline — rule-based mode');
+    return false;
+}
+async function mlEnhance(product) {
+    if (!ML_ENABLED)
+        return null;
+    try {
+        const res = await fetch(`${ML_API_URL}/ml/single`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product),
+            signal: AbortSignal.timeout(2000)
+        });
+        if (!res.ok)
+            return null;
+        return await res.json();
+    }
+    catch (err) {
+        return null;
+    }
+}
 // ── CSV Row Validator ──────────────────────────────────────────────
 function validateCSVRow(raw, rowIndex) {
     const errors = [];
@@ -76,7 +114,7 @@ function fragilityPadding(score) {
     return 0.5; // robust
 }
 // ── Core box selector ──────────────────────────────────────────────
-function selectOptimalBox(product, catalog) {
+function selectOptimalBox(product, catalog, mlResult) {
     const pad = fragilityPadding(product.fragility_score);
     // Minimum safe box dimensions for this product (with padding)
     const minL = product.product_length + pad;
@@ -224,22 +262,57 @@ function selectOptimalBox(product, catalog) {
     else {
         reason = `Current box is already optimal. Tolerance match with ${bestBoxDims}cm (${bestBoxVol}cm³). No meaningful size reduction possible for ${product.product_name}.`;
     }
+    let finalBoxId = best.box.id;
+    let finalBoxName = best.box.box_name;
+    let finalBoxDims = bestBoxDims;
+    let finalPrice = parseFloat(best.box.cost_per_box_usd.toFixed(2));
+    let finalSavings = fitStatus === 'same_box' ? 0 : savings;
+    let finalReason = reason;
+    let mlEnhanced = false;
+    let aiExplanation = undefined;
+    let mlConfidence = undefined;
+    if (mlResult && mlResult.recommended_box_name) {
+        if (mlResult.recommended_box_name !== best.box.box_name) {
+            if (mlResult.savings_usd > finalSavings) {
+                // ML found a better box that exists in catalog? We should find it.
+                const mlBox = catalog.find(b => b.box_name === mlResult.recommended_box_name);
+                if (mlBox) {
+                    finalBoxId = mlBox.id;
+                    finalBoxName = mlBox.box_name;
+                    finalBoxDims = `${mlBox.length_cm}×${mlBox.width_cm}×${mlBox.height_cm}`;
+                    finalPrice = parseFloat(mlBox.cost_per_box_usd.toFixed(2));
+                    finalSavings = mlResult.savings_usd;
+                    mlEnhanced = true;
+                    aiExplanation = mlResult.packaging_tip;
+                }
+            }
+        }
+        else {
+            // both agree
+            mlEnhanced = true;
+            mlConfidence = mlResult.ml_confidence_pct;
+        }
+    }
     return {
         row_index: product.row_index,
         product_name: product.product_name,
         original_box_dimensions: originalBoxDims,
         original_box_price: product.used_box_price,
-        optimized_box_dimensions: bestBoxDims,
-        optimized_box_price: parseFloat(best.box.cost_per_box_usd.toFixed(2)),
-        recommended_box_id: best.box.id,
-        recommended_box_name: best.box.box_name,
+        optimized_box_dimensions: finalBoxDims,
+        optimized_box_price: finalPrice,
+        recommended_box_id: finalBoxId,
+        recommended_box_name: finalBoxName,
         shipping_zone: product.shipping_zone,
-        savings: fitStatus === 'same_box' ? 0 : savings,
+        savings: finalSavings,
         fit_status: fitStatus,
-        optimization_reason: reason,
+        optimization_reason: finalReason,
         utilization_pct: parseFloat(best.utilization.toFixed(1)),
         dimensional_weight_kg: best.dimWeight,
         sustainability_score: best.box.sustainability_score,
+        ml_confidence_pct: mlConfidence,
+        ml_recommended_box: mlResult?.recommended_box_name,
+        ml_enhanced: mlEnhanced,
+        ai_explanation: aiExplanation,
         parsed_product: product,
         recommended_box: best.box,
     };
@@ -253,19 +326,42 @@ async function bulkOptimize(rawRows, catalog, onProgress) {
         for (let j = 0; j < chunk.length; j++) {
             const rawRow = chunk[j];
             const rowIndex = i + j;
+            const validation = validateCSVRow(rawRow, rowIndex);
+            if (!validation.valid || !validation.row) {
+                invalidRows.push({ rowIndex, errors: validation.errors });
+            }
+        }
+        const validRows = chunk.map((r, idx) => validateCSVRow(r, i + idx)).filter(v => v.valid && v.row).map(v => v.row);
+        // Bulk ML call
+        let mlResults = {};
+        if (ML_ENABLED && validRows.length > 0) {
             try {
-                const validation = validateCSVRow(rawRow, rowIndex);
-                if (!validation.valid || !validation.row) {
-                    invalidRows.push({ rowIndex, errors: validation.errors });
-                    continue;
+                const res = await fetch(`${ML_API_URL}/ml/bulk`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(validRows),
+                    signal: AbortSignal.timeout(5000)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    data.forEach((item, idx) => {
+                        mlResults[validRows[idx].row_index] = item;
+                    });
                 }
-                const result = selectOptimalBox(validation.row, catalog);
+            }
+            catch (err) {
+                // Fallback to rule-based silently
+            }
+        }
+        for (const row of validRows) {
+            try {
+                const mlResult = mlResults[row.row_index] || null;
+                const result = selectOptimalBox(row, catalog, mlResult);
                 results.push(result);
             }
             catch (err) {
-                // One bad row must never break the batch
                 invalidRows.push({
-                    rowIndex,
+                    rowIndex: row.row_index,
                     errors: [err instanceof Error ? err.message : 'Unknown processing error'],
                 });
             }

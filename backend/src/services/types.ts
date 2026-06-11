@@ -75,6 +75,10 @@ export interface OptimizationResult {
   utilization_pct: number
   dimensional_weight_kg: number
   sustainability_score: number
+  // ML Enhancements
+  ml_confidence_pct?: number
+  ml_recommended_box?: string
+  ml_enhanced?: boolean
   ai_explanation?: string
   // raw refs
   parsed_product: ParsedProduct
