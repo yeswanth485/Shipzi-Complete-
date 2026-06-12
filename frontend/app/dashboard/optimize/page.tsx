@@ -196,29 +196,43 @@ export default function OptimizePage() {
       setCurrentStep(2)
       console.log(`[OPTIMIZE] Sending ${rawRows.length} rows to /api/optimize/bulk`)
 
-      const response = await fetchWithRetry(`/api/optimize/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rows: rawRows,
-          mode: 'single',
-          catalog_id: 'default_catalog',
-          company_id: companyId,
-          run_id: currentRunId,
-        }),
-      }, 3, 5000)
+      const CHUNK_SIZE = 500;
+      let allResults: any[] = [];
+      let totalSavings = 0;
+      let totalOptimized = 0;
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        const errMsg = errData.error || errData.message || `HTTP ${response.status}`
-        throw new Error(`Optimization failed: ${errMsg}`)
+      for (let i = 0; i < rawRows.length; i += CHUNK_SIZE) {
+        const chunk = rawRows.slice(i, i + CHUNK_SIZE);
+        const response = await fetchWithRetry(`/api/optimize/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: chunk,
+            mode: 'single',
+            catalog_id: 'default_catalog',
+            company_id: companyId,
+            run_id: currentRunId,
+          }),
+        }, 3, 5000);
+
+        if (!response.ok) throw new Error(`Batch optimization failed at row ${i}`);
+        const data = await response.json();
+        allResults.push(...data.results);
+        totalSavings += data.summary.total_savings;
+        totalOptimized += data.summary.optimized;
+        setProcessedRows(Math.min(i + CHUNK_SIZE, rawRows.length));
       }
 
       setCurrentStep(5)
-      const data = await response.json()
-      setProcessedRows(rawRows.length)
-
-      setBulkResult(data)
+      setBulkResult({
+        results: allResults,
+        summary: {
+          total: rawRows.length,
+          optimized: totalOptimized,
+          total_savings: parseFloat(totalSavings.toFixed(2)),
+          avg_utilization: allResults.length ? parseFloat((allResults.reduce((acc: number, r: any) => acc + r.utilization_pct, 0) / allResults.length).toFixed(1)) : 0
+        }
+      } as any);
       setStatus('complete')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'

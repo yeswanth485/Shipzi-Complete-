@@ -145,7 +145,7 @@ export function selectOptimalBox(
   function boxFitsProduct(box: CatalogBox): boolean {
     const boxDims  = [box.length_cm, box.width_cm, box.height_cm].sort((a, b) => b - a)
     const prodDims = [minL, minW, minH].sort((a, b) => b - a)
-    const EPSILON = 0.01;
+    const EPSILON = 0.05; // 0.5mm tolerance
     return (
       boxDims[0] >= prodDims[0] - EPSILON &&
       boxDims[1] >= prodDims[1] - EPSILON &&
