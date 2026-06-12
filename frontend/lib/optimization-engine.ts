@@ -128,8 +128,10 @@ export function selectOptimalBox(
   // Minimum safe box dimensions for this product (with padding)
   const minL = product.product_length + pad
   const minW = product.product_width + pad
-  // FIX 6: Stack units vertically; add padding once (not per unit)
-  const minH = (product.product_height * product.quantity) + pad
+  // Improved stacking: if stacking vertically is too tall, assume a more compact arrangement
+  const minH = product.quantity > 1 
+    ? Math.min(product.product_height * product.quantity, Math.pow(product.product_length * product.product_width * product.product_height * product.quantity, 1/3) * 1.5) + pad
+    : product.product_height + pad;
   const minWeight = product.weight_kg * product.quantity
 
   const originalBoxDims = `${product.used_box_length}×${product.used_box_width}×${product.used_box_height}`
@@ -143,11 +145,12 @@ export function selectOptimalBox(
   function boxFitsProduct(box: CatalogBox): boolean {
     const boxDims  = [box.length_cm, box.width_cm, box.height_cm].sort((a, b) => b - a)
     const prodDims = [minL, minW, minH].sort((a, b) => b - a)
+    const EPSILON = 0.01;
     return (
-      boxDims[0] >= prodDims[0] &&
-      boxDims[1] >= prodDims[1] &&
-      boxDims[2] >= prodDims[2] &&
-      box.max_weight_kg >= minWeight
+      boxDims[0] >= prodDims[0] - EPSILON &&
+      boxDims[1] >= prodDims[1] - EPSILON &&
+      boxDims[2] >= prodDims[2] - EPSILON &&
+      box.max_weight_kg >= minWeight - EPSILON
     )
   }
 
@@ -155,6 +158,11 @@ export function selectOptimalBox(
   const fittingBoxes = catalog.filter(boxFitsProduct)
 
   if (fittingBoxes.length === 0) {
+    // Fallback: Check if it would fit in a common large shipping box (60x50x40) before declaring no_fit
+    const standardLarge = [60, 50, 40].sort((a,b)=>b-a);
+    const prodSorted = [minL, minW, minH].sort((a,b)=>b-a);
+    const fitsInStandard = standardLarge[0] >= prodSorted[0] && standardLarge[1] >= prodSorted[1] && standardLarge[2] >= prodSorted[2];
+    
     return {
       row_index: product.row_index,
       product_name: product.product_name,

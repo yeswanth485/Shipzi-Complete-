@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       .from('box_catalog')
       .select('*')
       .eq('company_id', company_id)
-      .eq('is_active', true)
+      .or('is_active.eq.true,is_active.is.null')
 
     if (catalogError || !catalog || catalog.length === 0) {
       return NextResponse.json({ message: 'No active boxes in catalog' }, { status: 400 })
