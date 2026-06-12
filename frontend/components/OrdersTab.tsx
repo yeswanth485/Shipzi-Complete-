@@ -60,7 +60,7 @@ export default function OrdersTab({ runId, companyId }: { runId: string, company
       setLoading(true)
       try {
         const { data, error } = await supabase
-          .from('optimization_runs_orders')
+          .from('optimized_orders')
           .select('*')
           .eq('run_id', runId)
           .eq('company_id', companyId)

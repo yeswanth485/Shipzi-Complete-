@@ -29,7 +29,7 @@ const ML_ENABLED = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
 export async function checkMLBridge(): Promise<boolean> {
   if (!ML_ENABLED) return false
   try {
-    const res = await fetch(`${ML_API_URL}/ml/health`, { signal: AbortSignal.timeout(2000) })
+    const res = await fetch(`${ML_API_URL}/ml/health`, { signal: AbortSignal.timeout(10000) })
     if (res.ok) {
       console.log('ML bridge connected ✅')
       return true
@@ -176,11 +176,8 @@ export function selectOptimalBox(
     }
   }
 
-  // Step 2: Only consider boxes SMALLER than the original used box
-  const smallerFittingBoxes = fittingBoxes.filter(b => {
-    const boxVol = b.length_cm * b.width_cm * b.height_cm
-    return boxVol < originalBoxVol
-  })
+  // Consider all fitting boxes; the scoring logic will prioritize the best one based on cost, utilization, and sustainability
+  const smallerFittingBoxes = fittingBoxes;
 
   // Step 3: If no smaller box fits, the current box is already optimal
   if (smallerFittingBoxes.length === 0) {
@@ -466,7 +463,7 @@ export function buildOrderInsertRows(
     product_length_cm: r.parsed_product.product_length,
     product_width_cm: r.parsed_product.product_width,
     product_height_cm: r.parsed_product.product_height,
-    product_weight_kg: r.parsed_product.weight_kg,
+    product_weight_kg: r.parsed_product.weight_kg || 0.5,
     fragility: r.parsed_product.fragility_score >= 7 ? 'high' : r.parsed_product.fragility_score >= 4 ? 'medium' : 'low',
     fragility_score: r.parsed_product.fragility_score,
     quantity: r.parsed_product.quantity,

@@ -96,7 +96,7 @@ export default function OptimizationUploadPage() {
           mode,
           catalog_id: 'default_catalog',
           run_id: crypto.randomUUID(),
-          company_id: 'default_company'
+          company_id: '00000000-0000-0000-0000-000000000001' // Use Demo Company ID
         })
       })
 

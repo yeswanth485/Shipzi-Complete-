@@ -98,9 +98,9 @@ export default function ShipmentsPage() {
         .from('shipments')
         .select(`
           *,
-          optimized_order:optimized_orders (
+          optimized_order:optimized_orders!order_id (
             product_name, savings_usd, utilization_pct,
-            recommended_box:box_catalog (box_name, length_cm, width_cm, height_cm)
+            recommended_box:box_catalog!recommended_box_id (box_name, length_cm, width_cm, height_cm)
           )
         `)
         .eq('company_id', companyId)

@@ -194,9 +194,8 @@ def multi_optimize():
             if not valid:
                 return jsonify({"error": err}), 400
                 
-        # Multi prediction dummy
-        result = _predict_single(data[0]) 
-        return jsonify(result), 200
+        results = [_predict_single(item) for item in data]
+        return jsonify(results), 200
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

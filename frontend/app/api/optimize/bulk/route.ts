@@ -113,25 +113,34 @@ export async function POST(req: Request) {
 
     // ── 3. Update optimization run status ──
     await supabase.from('optimization_runs').update({
-      total_rows: bulkResult.summary.total,
-      optimized_rows: bulkResult.summary.optimized,
+      total_products: bulkResult.summary.total,
       total_savings_usd: bulkResult.summary.total_savings,
       avg_utilization_pct: bulkResult.summary.avg_utilization,
-      invalid_rows: (bulkResult.invalidRows || []).length,
       status: 'complete'
     }).eq('id', run_id)
 
     // ── 4. Update analytics snapshot ──
     const today = new Date().toISOString().slice(0, 10)
+    const { data: existingSnap } = await supabase
+      .from('analytics_snapshots')
+      .select('*')
+      .eq('company_id', company_id)
+      .eq('snapshot_date', today)
+      .single()
+
+    const newTotal = (existingSnap?.total_shipments || 0) + bulkResult.summary.total
+    const newOptimized = (existingSnap?.optimized_shipments || 0) + bulkResult.summary.optimized
+    const newSavings = (existingSnap?.total_savings_usd || 0) + bulkResult.summary.total_savings
+
     await supabase.from('analytics_snapshots').upsert({
       company_id,
       snapshot_date: today,
-      total_shipments: bulkResult.summary.total,
-      optimized_shipments: bulkResult.summary.optimized,
-      total_savings_usd: bulkResult.summary.total_savings,
+      total_shipments: newTotal,
+      optimized_shipments: newOptimized,
+      total_savings_usd: newSavings,
       avg_utilization_pct: bulkResult.summary.avg_utilization,
-      optimization_rate_pct: bulkResult.summary.total > 0
-        ? parseFloat(((bulkResult.summary.optimized / bulkResult.summary.total) * 100).toFixed(1))
+      optimization_rate_pct: newTotal > 0
+        ? parseFloat(((newOptimized / newTotal) * 100).toFixed(1))
         : 0,
     }, { onConflict: 'company_id,snapshot_date' })
 
@@ -141,10 +150,19 @@ export async function POST(req: Request) {
       ? Math.round((1 - bulkResult.summary.avg_utilization / 100) * 50)
       : 0
 
+    const { data: existingSustain } = await supabase
+      .from('sustainability_metrics')
+      .select('*')
+      .eq('company_id', company_id)
+      .eq('metric_date', today)
+      .single()
+
+    const newCarbon = (existingSustain?.carbon_reduction_kg || 0) + carbonReduction
+
     await supabase.from('sustainability_metrics').upsert({
       company_id,
       metric_date: today,
-      carbon_reduction_kg: parseFloat(carbonReduction.toFixed(2)),
+      carbon_reduction_kg: parseFloat(newCarbon.toFixed(2)),
       packaging_waste_reduction_pct: wasteReduction,
       recyclable_material_pct: 75,
       sustainability_score: Math.min(100, Math.round(bulkResult.summary.avg_utilization + 20)),
