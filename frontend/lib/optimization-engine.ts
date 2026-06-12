@@ -23,7 +23,7 @@ export interface MLEnhancement {
   packaging_tip: string
 }
 
-const ML_API_URL = process.env.NEXT_PUBLIC_ML_BRIDGE_URL ?? 'http://localhost:5001'
+const ML_API_URL = process.env.ML_BRIDGE_URL || process.env.NEXT_PUBLIC_ML_BRIDGE_URL || 'http://localhost:5001'
 const ML_ENABLED = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
 
 export async function checkMLBridge(): Promise<boolean> {
@@ -318,9 +318,10 @@ export function selectOptimalBox(
         }
       }
     } else {
-      // both agree
+      // both agree — preserve ML metadata
       mlEnhanced = true
       mlConfidence = mlResult.ml_confidence_pct
+      aiExplanation = mlResult.packaging_tip
     }
   }
 
@@ -490,6 +491,7 @@ export function buildOrderInsertRows(
     fit_status: r.fit_status,
     optimization_reason: r.optimization_reason,
     ai_explanation: r.ai_explanation ?? null,
+    ml_confidence_pct: r.ml_confidence_pct ?? null,
     run_row_index: r.row_index,
   }))
 }
