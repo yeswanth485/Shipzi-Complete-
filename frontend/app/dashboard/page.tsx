@@ -157,7 +157,7 @@ export default function DashboardPage() {
   }, [boxCatalog])
 
   // Chart data
-  const savingsData = snapshots.map(s => ({
+  const savingsData = (snapshots || []).map(s => ({
     date: s.snapshot_date?.slice(5) ?? '',
     savings: Math.round(s.total_savings_usd ?? 0),
     shipments: s.total_shipments ?? 0,

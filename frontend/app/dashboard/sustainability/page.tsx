@@ -86,7 +86,8 @@ export default function SustainabilityPage() {
   const boxMaterialMap: Record<string, string> = {}
   boxCatalog.forEach(b => { boxMaterialMap[b.id] = b.material_type })
 
-  const avgScore = orders.length ? Math.round(orders.reduce((s, o) => s + (o.sustainability_score ?? 0), 0) / orders.length) : 0
+  const validScores = orders.filter(o => o.sustainability_score != null);
+  const avgScore = validScores.length ? Math.round(validScores.reduce((s, o) => s + (o.sustainability_score || 0), 0) / validScores.length) : 0;
   const totalCarbon = Math.round(orders.reduce((s, o) => s + (o.savings_usd ?? 0), 0) * 0.42)
   const totalOrders = orders.length
 
