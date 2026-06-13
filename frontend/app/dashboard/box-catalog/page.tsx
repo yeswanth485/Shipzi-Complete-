@@ -224,7 +224,7 @@ export default function BoxCatalogPage() {
 
   const filteredBoxes = filterMaterial === 'all' ? boxes : boxes.filter(b => b.material_type === filterMaterial)
 
-  const materials = ['all', ...new Set(boxes.map(b => b.material_type))]
+  const materials = ['all', ...Array.from(new Set(boxes.map(b => b.material_type)))]
 
   if (loading || isUserLoading) return (
     <div className="max-w-7xl mx-auto space-y-4">
