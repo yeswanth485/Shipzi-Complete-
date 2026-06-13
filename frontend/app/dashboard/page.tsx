@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useInView } from 'framer-motion'
 import { motion } from 'framer-motion'
@@ -104,49 +104,38 @@ export default function DashboardPage() {
   const [boxCatalog, setBoxCatalog] = useState<CatalogBox[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!companyId) return
-    ;(async () => {
-      try {
-        // Get the latest completed run
-        const { data: latestRun } = await supabase
-          .from('optimization_runs')
-          .select('id')
-          .eq('company_id', companyId)
-          .eq('status', 'complete')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-
-        let ordQuery = supabase.from('optimized_orders')
+    setLoading(true)
+    try {
+      const [{ data: ord, error: ordErr }, { data: boxes, error: boxErr }] = await Promise.all([
+        supabase.from('optimized_orders')
           .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status,recommended_box_id,used_box_length_cm,used_box_width_cm,used_box_height_cm')
           .eq('company_id', companyId)
           .order('created_at', { ascending: false })
-          .limit(2000)
-
-        if (latestRun?.id) {
-          ordQuery = ordQuery.eq('run_id', latestRun.id)
-        }
-
-        const [{ data: ord, error: ordErr }, { data: boxes, error: boxErr }] = await Promise.all([
-          ordQuery,
-          supabase.from('box_catalog')
-            .select('id, box_name')
-            .eq('company_id', companyId),
-        ])
-        
-        if (ordErr) console.error("Orders fetch error:", ordErr)
-        if (boxErr) console.error("Box catalog fetch error:", boxErr)
-
-        setOrders((ord as OptimizedOrderRow[]) ?? [])
-        setBoxCatalog((boxes as CatalogBox[]) ?? [])
-      } catch (err) {
-        console.error("Dashboard fetch exception:", err)
-      } finally {
-        setLoading(false)
-      }
-    })()
+          .limit(2000),
+        supabase.from('box_catalog')
+          .select('id, box_name')
+          .eq('company_id', companyId),
+      ])
+      if (ordErr) console.error("Orders fetch error:", ordErr)
+      if (boxErr) console.error("Box catalog fetch error:", boxErr)
+      setOrders((ord as OptimizedOrderRow[]) ?? [])
+      setBoxCatalog((boxes as CatalogBox[]) ?? [])
+    } catch (err) {
+      console.error("Dashboard fetch exception:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [companyId])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === 'visible') fetchData() }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [fetchData])
 
   const totalSavings = orders.reduce((s, o) => s + (o.savings_usd ?? 0), 0)
   const optimizedCount = orders.filter(o => o.fit_status === 'optimized').length

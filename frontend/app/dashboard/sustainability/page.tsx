@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { supabase } from '@/lib/supabase'
@@ -65,47 +65,38 @@ export default function SustainabilityPage() {
   const [boxCatalog, setBoxCatalog] = useState<CatalogBox[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!companyId) return
-    ;(async () => {
-      try {
-        // Get the latest completed run
-        const { data: latestRun } = await supabase
-          .from('optimization_runs')
-          .select('id')
-          .eq('company_id', companyId)
-          .eq('status', 'complete')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-
-        let ordQuery = supabase.from('optimized_orders')
+    setLoading(true)
+    try {
+      const [{ data: o, error: oErr }, { data: boxes, error: boxErr }] = await Promise.all([
+        supabase.from('optimized_orders')
           .select('sustainability_score, savings_usd, created_at, recommended_box_id')
           .eq('company_id', companyId)
           .order('created_at', { ascending: true })
-          .limit(5000)
-
-        if (latestRun?.id) {
-          ordQuery = ordQuery.eq('run_id', latestRun.id)
-        }
-
-        const [{ data: o, error: oErr }, { data: boxes, error: boxErr }] = await Promise.all([
-          ordQuery,
-          supabase.from('box_catalog')
-            .select('id, material_type')
-            .eq('company_id', companyId),
-        ])
-        if (oErr) console.error("Orders fetch error:", oErr)
-        if (boxErr) console.error("Box catalog fetch error:", boxErr)
-        setOrders((o as unknown as OrderRow[]) ?? [])
-        setBoxCatalog((boxes as unknown as CatalogBox[]) ?? [])
-      } catch (err) {
-        console.error("Sustainability fetch exception:", err)
-      } finally {
-        setLoading(false)
-      }
-    })()
+          .limit(5000),
+        supabase.from('box_catalog')
+          .select('id, material_type')
+          .eq('company_id', companyId),
+      ])
+      if (oErr) console.error("Orders fetch error:", oErr)
+      if (boxErr) console.error("Box catalog fetch error:", boxErr)
+      setOrders((o as unknown as OrderRow[]) ?? [])
+      setBoxCatalog((boxes as unknown as CatalogBox[]) ?? [])
+    } catch (err) {
+      console.error("Sustainability fetch exception:", err)
+    } finally {
+      setLoading(false)
+    }
   }, [companyId])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === 'visible') fetchData() }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [fetchData])
 
   const boxMaterialMap = useMemo(() => {
     const map: Record<string, string> = {}

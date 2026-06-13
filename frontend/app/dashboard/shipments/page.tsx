@@ -103,17 +103,7 @@ export default function ShipmentsPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      // First get the latest completed run
-      const { data: latestRun } = await supabase
-        .from('optimization_runs')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('status', 'complete')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      let query = supabase
+      const { data, error } = await supabase
         .from('shipments')
         .select(`
           *,
@@ -124,12 +114,6 @@ export default function ShipmentsPage() {
         `)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
-
-      if (latestRun?.id) {
-        query = query.eq('run_id', latestRun.id)
-      }
-
-      const { data, error } = await query
       if (error) console.error("Shipments fetch error:", error)
       if (!error) {
         setShipments((data as ShipmentWithOrder[]) ?? [])
@@ -142,6 +126,12 @@ export default function ShipmentsPage() {
   }, [companyId])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
+
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === 'visible') fetchShipments() }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [fetchShipments])
 
   const tabCounts = STATUS_TABS.reduce<Record<string,number>>((acc, tab) => {
     acc[tab] = tab === 'All'

@@ -52,28 +52,12 @@ export default function AnalyticsPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      // Get the latest completed run
-      const { data: latestRun } = await supabase
-        .from('optimization_runs')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('status', 'complete')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      let query = supabase
+      const { data: ords, error: ordErr } = await supabase
         .from('optimized_orders')
         .select('savings_usd,utilization_pct,sustainability_score,created_at,fit_status,recommended_box_id')
         .eq('company_id', companyId)
         .order('created_at', { ascending: true })
         .limit(5000)
-
-      if (latestRun?.id) {
-        query = query.eq('run_id', latestRun.id)
-      }
-
-      const { data: ords, error: ordErr } = await query
       
       if (ordErr) console.error("Orders fetch error:", ordErr)
       setOrders((ords as OptimizedOrderRow[]) ?? [])
@@ -85,6 +69,12 @@ export default function AnalyticsPage() {
   }, [companyId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === 'visible') fetchData() }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [fetchData])
 
   function cut(days: number): Date { const d = new Date(); d.setDate(d.getDate() - days); return d }
   function filterOrders(items: OptimizedOrderRow[]) {
