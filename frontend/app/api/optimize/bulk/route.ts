@@ -73,6 +73,7 @@ export async function POST(req: Request) {
     const chunks = chunkArray(insertRows, 500)
     const allInsertedOrders: { id: string; fit_status: string }[] = []
 
+    const insertErrors: string[] = []
     for (const chunk of chunks) {
       const { data: inserted, error } = await supabase
         .from('optimized_orders')
@@ -80,8 +81,15 @@ export async function POST(req: Request) {
         .select('id, fit_status')
       if (error) {
         console.error('Chunk insert error:', error)
+        insertErrors.push(error.message)
       }
       if (inserted) allInsertedOrders.push(...inserted)
+    }
+    if (insertErrors.length > 0 && allInsertedOrders.length === 0) {
+      return NextResponse.json(
+        { message: `Failed to save orders to database: ${insertErrors[0]}` },
+        { status: 500 }
+      )
     }
 
     // ── 2. Create shipments for each inserted order ──
@@ -107,7 +115,9 @@ export async function POST(req: Request) {
       const shipmentChunks = chunkArray(shipmentRows, 500)
       for (const chunk of shipmentChunks) {
         const { error: shipErr } = await supabase.from('shipments').insert(chunk)
-        if (shipErr) console.error('Shipment insert error:', shipErr)
+        if (shipErr) {
+          console.error('Shipment insert error:', shipErr)
+        }
       }
     }
 

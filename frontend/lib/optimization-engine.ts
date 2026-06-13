@@ -491,7 +491,6 @@ export function buildOrderInsertRows(
     fit_status: r.fit_status,
     optimization_reason: r.optimization_reason,
     ai_explanation: r.ai_explanation ?? null,
-    ml_confidence_pct: r.ml_confidence_pct ?? null,
     run_row_index: r.row_index,
   }))
 }
