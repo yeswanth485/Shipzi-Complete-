@@ -193,6 +193,8 @@ export default function OptimizePage() {
     setProcessedRows(0)
     setErrorMessage('')
 
+    let currentRunId: string | null = null
+
     try {
       // Step 1 — Create optimization run record
       setCurrentStep(1)
@@ -211,7 +213,7 @@ export default function OptimizePage() {
       if (runError || !runData) {
         throw new Error(`Failed to create optimization run: ${runError?.message ?? 'No data returned'}`)
       }
-      const currentRunId = runData.id as string
+      currentRunId = runData.id as string
       setRunId(currentRunId)
 
       // Step 2 — Send to Next.js API route (handles orders, shipments, analytics, sustainability)
