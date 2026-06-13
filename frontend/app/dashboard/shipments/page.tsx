@@ -83,6 +83,15 @@ function ProgressTracker({ current }: { current: string }) {
   )
 }
 
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+}
+
 export default function ShipmentsPage() {
   const { companyId, isLoading: isUserLoading } = useUser()
   const [shipments,   setShipments]   = useState<ShipmentWithOrder[]>([])
@@ -151,9 +160,13 @@ export default function ShipmentsPage() {
   )
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="max-w-7xl mx-auto">
       {/* Tab bar */}
-      <div className="flex gap-2 mb-5 flex-wrap items-center">
+      <motion.div variants={item} className="flex gap-2 mb-5 flex-wrap items-center">
         {STATUS_TABS.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className="px-4 py-2 rounded-full text-sm font-medium transition-all"
@@ -171,9 +184,9 @@ export default function ShipmentsPage() {
           style={{ color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
           <RefreshCw size={14} />
         </button>
-      </div>
+      </motion.div>
 
-      <div className="glass-card overflow-hidden">
+      <motion.div variants={item} className="glass-card overflow-hidden">
         {loading ? (
           <div className="p-10 text-center">
             <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto mb-3"
@@ -282,7 +295,7 @@ export default function ShipmentsPage() {
             </table>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

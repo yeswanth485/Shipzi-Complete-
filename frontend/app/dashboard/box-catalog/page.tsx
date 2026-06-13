@@ -29,6 +29,15 @@ const MATERIAL_COLORS: Record<string, string> = {
   poly_mailer: '#8B5CF6',
 }
 
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+}
+const itemVariant = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+}
+
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t) }, [onClose])
   return (
@@ -163,16 +172,20 @@ export default function BoxCatalogPage() {
   )
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="max-w-7xl mx-auto">
       <div className="flex gap-6">
         {/* Left: Table */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-4">
+          <motion.div variants={itemVariant} className="flex items-center justify-between mb-4">
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{boxes.length} boxes in catalog</p>
             <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2" style={{ padding: '8px 16px', fontSize: 13 }}>
               <Plus size={14} /> Add Box
             </button>
-          </div>
+          </motion.div>
 
           {/* Add Box Form */}
           {showAdd && (
@@ -317,6 +330,6 @@ export default function BoxCatalogPage() {
       </div>
 
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
-    </div>
+    </motion.div>
   )
 }

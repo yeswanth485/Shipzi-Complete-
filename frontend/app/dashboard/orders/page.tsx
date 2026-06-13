@@ -17,6 +17,15 @@ interface OrderWithBox extends OptimizedOrderRow {
 type ViewMode = 'solid' | 'wireframe' | 'exploded'
 type FitFilter = 'all' | 'optimized' | 'same_box' | 'no_fit'
 
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+}
+const itemVariant = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const map: Record<string, string> = {
     pending: 'badge-pending', optimized: 'badge-optimized',
@@ -145,9 +154,13 @@ export default function OrdersPage() {
   const totalSavings = filtered.reduce((s, o) => s + (o.savings_usd ?? 0), 0)
 
   return (
-    <div className="max-w-full">
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="max-w-full">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
+      <motion.div variants={itemVariant} className="flex flex-wrap items-center gap-3 mb-5">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" color="var(--text-muted)" />
@@ -185,10 +198,10 @@ export default function OrdersPage() {
             <Download size={13} /> Export
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Table */}
-      <div className="glass-card overflow-hidden">
+      <motion.div variants={itemVariant} className="glass-card overflow-hidden">
         {loading ? (
           <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>
             <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto mb-3"
@@ -316,7 +329,7 @@ export default function OrdersPage() {
             )}
           </>
         )}
-      </div>
+      </motion.div>
 
       {/* ── 3D Viewer Modal ── */}
       <AnimatePresence>
@@ -511,6 +524,6 @@ export default function OrdersPage() {
           </>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }
