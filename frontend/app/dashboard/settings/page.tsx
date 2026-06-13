@@ -159,6 +159,29 @@ export default function SettingsPage() {
     }))
   }
 
+  const handleCompanyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !firebaseUser || !userData?.company_id) return
+    try {
+      const ext = file.name.split('.').pop() ?? 'png'
+      const path = `company/${userData.company_id}/logo.${ext}`
+      const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true })
+      if (!error) {
+        const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
+        if (urlData?.publicUrl) {
+          await supabase.from('companies').update({ logo_url: urlData.publicUrl }).eq('id', userData.company_id)
+          setCompanyLogoUrl(urlData.publicUrl)
+          await refreshUser()
+          setToast('Company logo updated ✓')
+        }
+      } else {
+        setToast('Logo upload failed: ' + error.message)
+      }
+    } catch (err: any) {
+      setToast('Logo upload error: ' + err.message)
+    }
+  }
+
   const usagePct = subscription ? Math.round(((subscription.total_optimizations ?? 0) / (subscription.monthly_optimization_limit ?? 10)) * 100) : 0
 
   return (
@@ -247,9 +270,29 @@ export default function SettingsPage() {
               {activeTab === 'Company' && (
                 <div className="glass-card p-6 space-y-5">
                   <h2 className="font-syne font-bold text-white">Company Settings</h2>
-                  {companyLogoUrl && (
-                    <Image src={companyLogoUrl} alt="Company logo" width={80} height={40} className="object-contain rounded-lg" />
-                  )}
+                  
+                  {/* Company Logo Upload */}
+                  <div>
+                    <label className="block text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>Company Logo</label>
+                    <div className="relative border-2 border-dashed rounded-xl p-6 text-center transition-colors"
+                      style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                      <input type="file" accept=".png,.jpg,.jpeg,.svg" onChange={handleCompanyLogoUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer" />
+                      {companyLogoUrl ? (
+                        <div className="flex items-center justify-center gap-3">
+                          <Image src={companyLogoUrl} alt="Company Logo" width={80} height={40} className="object-contain rounded-lg" unoptimized />
+                          <span className="text-sm" style={{ color: 'var(--accent-success)' }}>✓ Logo uploaded</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-3xl mb-2">🖼️</div>
+                          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Drop PNG, JPG or SVG here</p>
+                          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Upload your company logo</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>Company Name</label>
                     <input value={companyData.name} onChange={e => setCompanyData(p => ({ ...p, name: e.target.value }))} className="input-dark" />

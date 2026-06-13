@@ -65,7 +65,7 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
       <div className="flex items-center justify-between px-6 h-[72px] flex-shrink-0"
         style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <Link href="/dashboard" className="flex items-center gap-3">
-          <Image src="/shipzi-logo.svg" alt="Shipzi" width={36} height={36} className="object-contain" />
+          <Image src="/shipzi-logo.png" alt="Shipzi Logo" width={36} height={36} className="object-contain" />
           <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
         </Link>
         {mobile && (
@@ -253,6 +253,17 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           )}
 
           <span className="text-sm hidden md:block" style={{ color: 'var(--text-muted)' }}>{userData?.companies?.name}</span>
+          
+          {userData?.companies?.logo_url && (
+            <Image
+              src={userData.companies.logo_url}
+              alt="Company Logo"
+              width={28}
+              height={28}
+              className="object-contain rounded hidden md:block"
+              unoptimized
+            />
+          )}
 
           <div className="relative" data-avatar-dropdown onClick={e => e.stopPropagation()}>
             <button onClick={() => setAvatarDropdown(!avatarDropdown)}

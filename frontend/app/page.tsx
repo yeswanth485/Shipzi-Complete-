@@ -55,7 +55,7 @@ function Navbar() {
       <div className="max-w-[1200px] mx-auto px-6 h-full flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <Image src="/shipzi-logo.svg" alt="Shipzi" width={40} height={40} className="object-contain" priority />
+          <Image src="/shipzi-logo.png" alt="Shipzi Logo" width={40} height={40} className="object-contain" priority />
           <span className="font-syne font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
         </div>
 

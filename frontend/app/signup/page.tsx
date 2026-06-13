@@ -103,7 +103,7 @@ export default function SignupPage() {
       <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
         <div className="w-full max-w-md py-8">
           <div className="flex items-center gap-3 mb-10">
-            <Image src="/shipzi-logo.svg" alt="Shipzi" width={40} height={40} className="object-contain" priority />
+            <Image src="/shipzi-logo.png" alt="Shipzi Logo" width={40} height={40} className="object-contain" priority />
             <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
           </div>
 

@@ -79,20 +79,23 @@ export default function OnboardingPage() {
     setSubmitError('')
     setLogoWarning('')
     try {
-      const ext = file.name.split('.').pop()
+      const ext = file.name.split('.').pop() ?? 'png'
       const path = `${firebaseUser?.uid ?? 'anon'}/logo.${ext}`
       const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true })
       if (!error) {
         const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
-        updateForm({ logoUrl: urlData.publicUrl })
+        if (urlData?.publicUrl) {
+          updateForm({ logoUrl: urlData.publicUrl })
+        } else {
+          setLogoWarning('Logo uploaded but URL unavailable. You can add it later in Settings > Company.')
+        }
       } else {
-        // Don't block onboarding — just warn
-        console.warn('Logo upload skipped:', error.message)
-        setLogoWarning('Logo upload skipped (storage policy). You can add it later in Settings.')
+        console.warn('Logo storage upload failed:', error.message)
+        setLogoWarning('Logo upload skipped (storage not configured). You can add it later in Settings > Company.')
       }
     } catch (err: any) {
       console.warn('Logo upload error:', err.message)
-      setLogoWarning('Logo upload skipped. You can add it later in Settings.')
+      setLogoWarning('Logo upload skipped. You can add it later in Settings > Company.')
     } finally {
       setLogoUploading(false)
     }
@@ -171,7 +174,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 justify-center mb-10">
-          <Image src="/shipzi-logo.svg" alt="Shipzi" width={36} height={36} className="object-contain" />
+          <Image src="/shipzi-logo.png" alt="Shipzi Logo" width={36} height={36} className="object-contain" />
           <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
         </div>
 
@@ -233,7 +236,7 @@ export default function OnboardingPage() {
                       className="absolute inset-0 opacity-0 cursor-pointer" />
                     {form.logoUrl ? (
                       <div className="flex items-center justify-center gap-3">
-                        <Image src={form.logoUrl} alt="Logo preview" width={48} height={48} className="rounded-lg object-contain" />
+                        <Image src={form.logoUrl} alt="Logo preview" width={48} height={48} className="rounded-lg object-contain" unoptimized />
                         <span className="text-sm" style={{ color: 'var(--accent-success)' }}>✓ Logo uploaded</span>
                       </div>
                     ) : logoUploading ? (
