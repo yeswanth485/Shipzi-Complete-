@@ -1,68 +1,16 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { AnimatedCounter } from './utils'
 
-function CSS3DBox({ size, color, position, rotation, animClass, animDelay }: {
-  size: [number, number, number]; color: string; position: [number, number, number]
-  rotation: [number, number, number]; animClass: string; animDelay: number
-}) {
-  const [l, w, h] = size
-  const faces = [
-    { transform: `translateZ(${h/2}px)`, width: l, height: w, bg: color },
-    { transform: `translateZ(-${h/2}px) rotateY(180deg)`, width: l, height: w, bg: color },
-    { transform: `translateX(-${l/2}px) rotateY(-90deg)`, width: h, height: w, bg: color },
-    { transform: `translateX(${l/2}px) rotateY(90deg)`, width: h, height: w, bg: color },
-    { transform: `translateY(-${w/2}px) rotateX(90deg)`, width: l, height: h, bg: color },
-    { transform: `translateY(${w/2}px) rotateX(-90deg)`, width: l, height: h, bg: color },
-  ]
-
-  return (
-    <motion.div
-      className="absolute"
-      style={{
-        left: '50%', top: '50%',
-        transformStyle: 'preserve-3d',
-        width: l, height: w, marginLeft: -l/2, marginTop: -w/2,
-      }}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.8, delay: animDelay, ease: [0.34, 1.56, 0.64, 1] }}
-    >
-      <div
-        className={animClass}
-        style={{
-          width: '100%', height: '100%',
-          position: 'relative',
-          transformStyle: 'preserve-3d',
-          transform: `translate3d(${position[0]}px, ${position[1]}px, ${position[2]}px) rotateX(${rotation[0]}deg) rotateY(${rotation[1]}deg)`,
-        }}
-      >
-        {faces.map((face, i) => (
-          <div
-            key={i}
-            className="absolute"
-            style={{
-              width: face.width, height: face.height,
-              transform: face.transform,
-              background: i === 0 ? color : `${color}dd`,
-              border: `1px solid ${color}44`,
-              backfaceVisibility: 'visible',
-              left: '50%', top: '50%',
-              marginLeft: -face.width/2, marginTop: -face.height/2,
-            }}
-          />
-        ))}
-      </div>
-    </motion.div>
-  )
-}
+const HeroScene = dynamic(() => import('@/components/HeroScene'), { ssr: false })
 
 function Particles() {
   const particles = useMemo(() =>
-    Array.from({ length: 24 }, (_, i) => ({
+    Array.from({ length: 20 }, (_, i) => ({
       id: i,
       left: `${10 + Math.random() * 80}%`,
       top: `${10 + Math.random() * 80}%`,
@@ -247,25 +195,28 @@ export default function Hero() {
           </motion.div>
         </div>
 
-        {/* Right Column — 3D Floating Boxes */}
-        <div className="relative h-[500px] hidden lg:block" style={{ perspective: 800 }}>
-          {/* Ambient Light */}
+        {/* Right Column — Real Three.js 3D Scene */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.0, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="relative h-[500px] hidden lg:block"
+        >
+          {/* Ambient glow behind scene */}
           <div className="absolute inset-0 pointer-events-none" style={{
-            background: 'radial-gradient(600px circle at 50% 50%, rgba(37,99,235,0.07), transparent)',
+            background: 'radial-gradient(500px circle at 50% 50%, rgba(37,99,235,0.08), transparent)',
           }} />
 
-          {/* Floating Boxes */}
-          <CSS3DBox size={[120, 100, 90]} color="#A07820" position={[-60, 20, 0]} rotation={[-10, 15, 0]} animClass="animate-[spin_18s_linear_infinite]" animDelay={0.6} />
-          <CSS3DBox size={[80, 70, 65]} color="#2563EBcc" position={[120, -80, 0]} rotation={[15, -20, 0]} animClass="animate-[spin_12s_linear_infinite_reverse]" animDelay={0.75} />
-          <CSS3DBox size={[55, 50, 48]} color="#06B6D499" position={[160, 100, 0]} rotation={[0, 0, 0]} animClass="animate-[spin_22s_linear_infinite]" animDelay={0.9} />
-          <CSS3DBox size={[120, 100, 90]} color="transparent" position={[80, -40, 0]} rotation={[0, 0, 0]} animClass="animate-[spin_30s_linear_infinite]" animDelay={1.05} />
+          {/* Three.js Canvas */}
+          <HeroScene />
 
-          <Particles />
-
-          {/* Depth Fog */}
-          <div className="absolute bottom-0 left-0 right-0 h-[180px] pointer-events-none"
+          {/* Depth fog at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-[160px] pointer-events-none"
             style={{ background: 'linear-gradient(transparent, var(--void))' }} />
-        </div>
+
+          {/* Floating particles overlay */}
+          <Particles />
+        </motion.div>
       </div>
 
       <ScrollHint />
