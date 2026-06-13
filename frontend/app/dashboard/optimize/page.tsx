@@ -17,6 +17,7 @@ import { useSubscription } from '@/context/SubscriptionContext'
 import UpgradeModal from '@/components/UpgradeModal'
 
 type Status = 'idle' | 'parsing' | 'processing' | 'saving' | 'complete' | 'error'
+type UploadMode = 'single' | 'multi'
 
 const CSV_COLUMNS = [
   { name: 'product_name',     type: 'text',   example: 'Wireless Earbuds', desc: 'Product identifier' },
@@ -29,6 +30,20 @@ const CSV_COLUMNS = [
   { name: 'fragility_score',  type: 'number', example: '7',               desc: '0 (robust) – 10 (very fragile)' },
   { name: 'used_box_price',   type: 'number', example: '1.40',            desc: 'Cost of current box ($)' },
   { name: 'shipping_zone',    type: 'text',   example: 'Zone 3',          desc: 'Zone 1–8 or International' },
+]
+
+const MULTI_CSV_COLUMNS = [
+  { name: 'order_id',            type: 'text',   example: 'ORD-001',             desc: 'Order identifier' },
+  { name: 'product_names',       type: 'text',   example: 'Earbuds|Case|Charger', desc: 'Pipe-separated product names' },
+  { name: 'product_lengths',     type: 'number', example: '12|18|8',             desc: 'Pipe-separated lengths (cm)' },
+  { name: 'product_widths',      type: 'number', example: '8|10|5',              desc: 'Pipe-separated widths (cm)' },
+  { name: 'product_heights',     type: 'number', example: '6|3|4',               desc: 'Pipe-separated heights (cm)' },
+  { name: 'product_fragilities', type: 'number', example: '7|2|1',               desc: 'Pipe-separated fragility (optional)' },
+  { name: 'used_box_length',     type: 'number', example: '25',                  desc: 'Shared box length (cm)' },
+  { name: 'used_box_width',      type: 'number', example: '20',                  desc: 'Shared box width (cm)' },
+  { name: 'used_box_height',     type: 'number', example: '15',                  desc: 'Shared box height (cm)' },
+  { name: 'used_box_price',      type: 'number', example: '2.50',                desc: 'Cost of current box ($)' },
+  { name: 'shipping_zone',       type: 'text',   example: 'Zone 3',              desc: 'Zone 1–8 or International' },
 ]
 
 const FIT_STATUS_BADGE: Record<string, string> = {
@@ -79,6 +94,7 @@ export default function OptimizePage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitMessage, setLimitMessage] = useState('')
+  const [uploadMode, setUploadMode] = useState<UploadMode>('single')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback((file: File) => {
@@ -114,6 +130,15 @@ export default function OptimizePage() {
     })
   }, [])
 
+  const handleModeChange = (newMode: UploadMode) => {
+    setUploadMode(newMode)
+    setRawRows([])
+    setFileName('')
+    setErrorMessage('')
+    setBulkResult(null)
+    setStatus('idle')
+  }
+
   const downloadSampleCSV = () => {
     const header = CSV_COLUMNS.map(c => c.name).join(',')
     const rows = [
@@ -128,6 +153,21 @@ export default function OptimizePage() {
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'shipzi_sample.csv'
+    a.click()
+  }
+
+  const downloadMultiSampleCSV = () => {
+    const header = MULTI_CSV_COLUMNS.map(c => c.name).join(',')
+    const rows = [
+      header,
+      'ORD-001,Wireless Earbuds|Phone Case|Charger,12|18|8,8|10|5,6|3|4,7|2|1,25,20,15,2.50,Zone 3',
+      'ORD-002,Smart Watch|Watch Band,14|20,12|8,7|3,6|1,30,25,20,3.00,Zone 2',
+      'ORD-003,Ceramic Mug|Gift Box|Tissue Paper,10|25|15,10|20|10,12|15|5,9|3|0,20,15,12,1.80,Zone 1',
+    ].join('\n')
+    const blob = new Blob([rows], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'shipzi_multi_sample.csv'
     a.click()
   }
 
@@ -205,7 +245,7 @@ export default function OptimizePage() {
           user_id: firebaseUser?.uid,
           total_products: rawRows.length,
           status: 'processing',
-          run_name: `Bulk run — ${rawRows.length} rows — ${new Date().toLocaleString()}`,
+          run_name: `${uploadMode === 'multi' ? 'Multi' : 'Single'} run — ${rawRows.length} rows — ${new Date().toLocaleString()}`,
         })
         .select('id')
         .single()
@@ -232,7 +272,7 @@ export default function OptimizePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             rows: chunk,
-            mode: 'single',
+            mode: uploadMode,
             catalog_id: 'default_catalog',
             company_id: companyId,
             run_id: currentRunId,
@@ -284,8 +324,30 @@ export default function OptimizePage() {
 
           {/* Upload Zone */}
           <div className="glass-card p-6">
-            <h2 className="font-syne font-bold text-white mb-1">Upload Product CSV</h2>
-            <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Supports 2,000–10,000 rows per batch</p>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-syne font-bold text-white">Upload Product CSV</h2>
+              <div className="flex bg-[var(--bg-elevated)] rounded-lg p-0.5" style={{ border: '1px solid var(--border-subtle)' }}>
+                <button
+                  onClick={() => handleModeChange('single')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    uploadMode === 'single' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-muted)] hover:text-white'
+                  }`}>
+                  Single Product
+                </button>
+                <button
+                  onClick={() => handleModeChange('multi')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    uploadMode === 'multi' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-muted)] hover:text-white'
+                  }`}>
+                  Multi Product
+                </button>
+              </div>
+            </div>
+            <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+              {uploadMode === 'single'
+                ? 'One product per row — Supports 2,000–10,000 rows per batch'
+                : 'Multiple products per row (pipe-separated) — Great for order-based optimization'}
+            </p>
 
             <div
               onClick={() => fileRef.current?.click()}
@@ -339,7 +401,9 @@ export default function OptimizePage() {
               onClick={() => setShowDocs(!showDocs)}
               className="w-full px-6 py-4 flex items-center justify-between text-left"
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <span className="font-medium text-sm text-white">Required CSV Columns</span>
+              <span className="font-medium text-sm text-white">
+                {uploadMode === 'single' ? 'Required CSV Columns' : 'Multi-Product CSV Columns'}
+              </span>
               {showDocs ? <ChevronUp size={16} color="var(--text-muted)" /> : <ChevronDown size={16} color="var(--text-muted)" />}
             </button>
             <AnimatePresence>
@@ -356,7 +420,7 @@ export default function OptimizePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {CSV_COLUMNS.map(col => (
+                          {(uploadMode === 'single' ? CSV_COLUMNS : MULTI_CSV_COLUMNS).map(col => (
                             <tr key={col.name} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                               <td className="py-2 pr-3 font-mono" style={{ color: 'var(--accent-secondary)', fontSize: 10 }}>{col.name}</td>
                               <td className="py-2 pr-3" style={{ color: 'var(--text-muted)' }}>{col.type}</td>
@@ -368,7 +432,7 @@ export default function OptimizePage() {
                       </table>
                     </div>
                     <button
-                      onClick={downloadSampleCSV}
+                      onClick={uploadMode === 'single' ? downloadSampleCSV : downloadMultiSampleCSV}
                       className="btn-ghost mt-4 flex items-center gap-2"
                       style={{ fontSize: 12, padding: '8px 16px' }}>
                       <Download size={14} /> Download Sample CSV
@@ -383,7 +447,7 @@ export default function OptimizePage() {
           {rawRows.length > 0 && status !== 'processing' && status !== 'saving' && (
             <div className="glass-card p-6">
               <p className="text-sm font-semibold text-white mb-3">
-                {rawRows.length.toLocaleString()} rows ready to optimize
+                {rawRows.length.toLocaleString()} {uploadMode === 'multi' ? 'orders' : 'rows'} ready to optimize
               </p>
 
               {/* Data preview */}
@@ -391,27 +455,48 @@ export default function OptimizePage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-subtle)' }}>
-                      {['Product', 'Product dims', 'Used box', 'Frag.', 'Zone'].map(h => (
-                        <th key={h} className="text-left py-2 px-2" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
+                      {uploadMode === 'single' ? (
+                        ['Product', 'Product dims', 'Used box', 'Frag.', 'Zone'].map(h => (
+                          <th key={h} className="text-left py-2 px-2" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))
+                      ) : (
+                        ['Order', 'Products', 'Used box', 'Zone'].map(h => (
+                          <th key={h} className="text-left py-2 px-2" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {previewRows.map((row, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td className="py-2 px-2 max-w-[100px] truncate" style={{ color: 'var(--text-primary)' }}>{row.product_name}</td>
-                        <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                          {row.product_length}×{row.product_width}×{row.product_height}
-                        </td>
-                        <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                          {row.used_box_length}×{row.used_box_width}×{row.used_box_height}
-                        </td>
-                        <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>{row.fragility_score}</td>
-                        <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row.shipping_zone}</td>
+                        {uploadMode === 'single' ? (
+                          <>
+                            <td className="py-2 px-2 max-w-[100px] truncate" style={{ color: 'var(--text-primary)' }}>{row.product_name}</td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {row.product_length}×{row.product_width}×{row.product_height}
+                            </td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {row.used_box_length}×{row.used_box_width}×{row.used_box_height}
+                            </td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>{row.fragility_score}</td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row.shipping_zone}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-2 px-2 max-w-[80px] truncate" style={{ color: 'var(--text-primary)' }}>{(row as any).order_id || '-'}</td>
+                            <td className="py-2 px-2 max-w-[150px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                              {((row as any).product_names || '').split('|').join(', ')}
+                            </td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {row.used_box_length}×{row.used_box_width}×{row.used_box_height}
+                            </td>
+                            <td className="py-2 px-2" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row.shipping_zone}</td>
+                          </>
+                        )}
                       </tr>
                     ))}
                     {rawRows.length > 5 && (
-                      <tr><td colSpan={5} className="py-2 px-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <tr><td colSpan={uploadMode === 'single' ? 5 : 4} className="py-2 px-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                         + {(rawRows.length - 5).toLocaleString()} more rows...
                       </td></tr>
                     )}
@@ -424,7 +509,7 @@ export default function OptimizePage() {
                 disabled={status === 'parsing'}
                 className="btn-primary w-full justify-center"
                 style={{ padding: '14px' }}>
-                ⚡ Optimize {rawRows.length.toLocaleString()} Shipments
+                ⚡ Optimize {rawRows.length.toLocaleString()} {uploadMode === 'multi' ? 'Orders' : 'Shipments'}
               </button>
             </div>
           )}
@@ -439,7 +524,11 @@ export default function OptimizePage() {
               <div className="text-6xl mb-4">📦</div>
               <h3 className="font-syne text-xl font-bold text-white mb-2">Ready to Optimize</h3>
               <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>Upload a CSV with your product & box data.</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Supports bulk batches of 2,000–10,000 rows.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                {uploadMode === 'single'
+                  ? 'Single product mode — one product per row.'
+                  : 'Multi product mode — multiple products per row using pipe separators.'}
+              </p>
             </div>
           )}
 
@@ -452,7 +541,7 @@ export default function OptimizePage() {
                 <div className="absolute inset-3 flex items-center justify-center text-2xl">⚡</div>
               </div>
               <h3 className="font-syne text-xl font-bold text-white mb-1">
-                Optimizing {rawRows.length.toLocaleString()} Shipments
+                Optimizing {rawRows.length.toLocaleString()} {uploadMode === 'multi' ? 'Orders' : 'Shipments'}
               </h3>
               <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
                 AI is selecting the smallest valid box for every row

@@ -61,7 +61,17 @@ export default function OptimizationUploadPage() {
         if (!row.fragility_score) rowErrors.push('Missing fragility_score')
       } else {
         // Multi
-        if (!(row as any).order_id && !(row as any).product_names) rowErrors.push('Missing order_id or product_names')
+        const r = row as any
+        if (!r.product_names) rowErrors.push('Missing product_names')
+        if (!r.product_lengths) rowErrors.push('Missing product_lengths')
+        if (!r.product_widths) rowErrors.push('Missing product_widths')
+        if (!r.product_heights) rowErrors.push('Missing product_heights')
+        // Validate pipe-separated counts match
+        if (r.product_names && r.product_lengths) {
+          const nameCount = r.product_names.split('|').length
+          const lenCount = r.product_lengths.split('|').length
+          if (nameCount !== lenCount) rowErrors.push('product_names and product_lengths count mismatch')
+        }
       }
       
       val.push({
