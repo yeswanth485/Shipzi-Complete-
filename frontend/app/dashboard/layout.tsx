@@ -8,9 +8,11 @@ import { signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { clearAuthCookies } from '@/lib/auth-cookies'
 import { useUser } from '@/context/UserContext'
+import { SubscriptionProvider, useSubscription } from '@/context/SubscriptionContext'
+import UpgradeModal from '@/components/UpgradeModal'
 import {
   LayoutDashboard, Zap, Package, Truck, Box, BarChart3, Leaf, Settings,
-  Menu, X, Bell, Search, LogOut, ChevronDown
+  Menu, X, Bell, Search, LogOut, ChevronDown, Crown
 } from 'lucide-react'
 
 const navItems = [
@@ -51,6 +53,7 @@ function Avatar({ name, url, size = 36 }: { name?: string | null; url?: string |
 function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: () => void; onLogout: () => void }) {
   const pathname = usePathname()
   const { userData } = useUser()
+  const { subscription, isPro, optimizationsRemaining } = useSubscription()
 
   return (
     <div className="flex flex-col h-full"
@@ -67,6 +70,23 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
           <button onClick={onClose} style={{ color: 'var(--text-muted)' }}>
             <X size={20} />
           </button>
+        )}
+      </div>
+
+      {/* Plan Badge */}
+      <div className="mx-3 mt-3 px-3 py-2 rounded-lg flex items-center gap-2"
+        style={{
+          background: isPro ? 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(6,182,212,0.08) 100%)' : 'rgba(255,255,255,0.03)',
+          border: `1px solid ${isPro ? 'rgba(16,185,129,0.3)' : 'var(--border-subtle)'}`,
+        }}>
+        <Crown size={14} color={isPro ? 'var(--accent-success)' : 'var(--text-muted)'} />
+        <span className="text-xs font-medium" style={{ color: isPro ? 'var(--accent-success)' : 'var(--text-secondary)' }}>
+          {isPro ? 'Pro Plan' : 'Free Plan'}
+        </span>
+        {!isPro && subscription && (
+          <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+            {optimizationsRemaining}/10 opts left
+          </span>
         )}
       </div>
 
@@ -92,23 +112,25 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
         })}
       </nav>
 
-      {/* Upgrade Banner */}
-      <div className="mx-3 mb-3 p-4 rounded-xl"
-        style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(37,99,235,0.3)' }}>
-        <p className="text-xs font-bold text-white mb-1">⚡ Upgrade to Growth</p>
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Unlock unlimited optimizations</p>
-        <Link href="/dashboard/settings" className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-block"
-          style={{ background: 'var(--accent-primary)', color: 'white' }}>
-          Upgrade Now
-        </Link>
-      </div>
+      {/* Upgrade Banner — only for free users */}
+      {!isPro && (
+        <div className="mx-3 mb-3 p-4 rounded-xl"
+          style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(37,99,235,0.3)' }}>
+          <p className="text-xs font-bold text-white mb-1">⚡ Upgrade to Pro</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Unlimited optimizations & rows</p>
+          <Link href="/dashboard/settings" className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-block"
+            style={{ background: 'var(--accent-primary)', color: 'white' }}>
+            Upgrade Now
+          </Link>
+        </div>
+      )}
 
       {/* User Profile */}
       <div className="p-4 flex items-center gap-3"
         style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <Avatar name={userData?.full_name} url={userData?.avatar_url} size={36} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>              {userData?.full_name ?? 'User'}</p>
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{userData?.full_name ?? 'User'}</p>
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{userData?.email}</p>
         </div>
         <button onClick={onLogout} className="flex-shrink-0 p-1.5 rounded-lg transition-colors"
@@ -122,14 +144,14 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
   )
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { firebaseUser, userData, isLoading } = useUser()
+  const { isPro, showUpgradeModal, setShowUpgradeModal, upgradeReason } = useSubscription()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [avatarDropdown, setAvatarDropdown] = useState(false)
 
-  // BUG-017 FIX: Close avatar dropdown on outside click
   useEffect(() => {
     if (!avatarDropdown) return
     const handler = (e: MouseEvent) => {
@@ -157,7 +179,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const pageTitle = pageTitles[pathname] ?? 'Dashboard'
 
-  // BUG-012 FIX: Use single handleLogout (removed duplicate in Sidebar)
   const handleLogout = async () => {
     await signOut(auth)
     clearAuthCookies()
@@ -207,6 +228,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Bell size={18} />
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'var(--accent-danger)' }} />
           </button>
+
+          {/* Plan Badge in top bar */}
+          <span className="text-xs px-2.5 py-1 rounded-full font-medium hidden md:block"
+            style={{
+              background: isPro ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.05)',
+              color: isPro ? 'var(--accent-success)' : 'var(--text-muted)',
+              border: `1px solid ${isPro ? 'rgba(16,185,129,0.3)' : 'var(--border-subtle)'}`,
+            }}>
+            {isPro ? 'Pro' : 'Free'}
+          </span>
+
           <span className="text-sm hidden md:block" style={{ color: 'var(--text-muted)' }}>{userData?.companies?.name}</span>
 
           <div className="relative" data-avatar-dropdown onClick={e => e.stopPropagation()}>
@@ -252,6 +284,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="md:ml-[240px] pt-[60px] min-h-screen p-6">
         {children}
       </main>
+
+      {/* Global Upgrade Modal */}
+      <UpgradeModal
+        show={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        reason={upgradeReason}
+      />
     </div>
+  )
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SubscriptionProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </SubscriptionProvider>
   )
 }

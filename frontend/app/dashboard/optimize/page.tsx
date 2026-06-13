@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Papa from 'papaparse'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
-import { Upload, ChevronDown, ChevronUp, Download, Eye, AlertCircle, CheckCircle } from 'lucide-react'
+import { Upload, ChevronDown, ChevronUp, Download, Eye, AlertCircle, CheckCircle, Crown } from 'lucide-react'
 import {
   CatalogBox,
   CSVRow,
@@ -13,6 +13,8 @@ import {
 import {
   type BulkResult,
 } from '@/lib/optimization-engine'
+import { useSubscription } from '@/context/SubscriptionContext'
+import UpgradeModal from '@/components/UpgradeModal'
 
 type Status = 'idle' | 'parsing' | 'processing' | 'saving' | 'complete' | 'error'
 
@@ -63,6 +65,7 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 
 export default function OptimizePage() {
   const { companyId, firebaseUser } = useUser()
+  const { isFree, canOptimize, optimizationsRemaining, canUploadRows, recordOptimization, setShowUpgradeModal, setUpgradeReason } = useSubscription()
   const [rawRows, setRawRows] = useState<CSVRow[]>([])
   const [fileName, setFileName] = useState('')
   const [isDragging, setIsDragging] = useState(false)
@@ -74,6 +77,8 @@ export default function OptimizePage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null)
   const [showDocs, setShowDocs] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitMessage, setLimitMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback((file: File) => {
@@ -90,6 +95,15 @@ export default function OptimizePage() {
       skipEmptyLines: true,
       transformHeader: (h: string) => h.trim().toLowerCase().replace(/\s+/g, '_'),
       complete: ({ data }: { data: CSVRow[] }) => {
+        // Check row limit for free users
+        const rowCheck = canUploadRows(data.length)
+        if (!rowCheck.allowed) {
+          setLimitMessage(rowCheck.reason ?? 'Row limit exceeded')
+          setShowLimitModal(true)
+          setStatus('error')
+          setErrorMessage(rowCheck.reason ?? 'Row limit exceeded')
+          return
+        }
         setRawRows(data)
         setStatus('idle')
       },
@@ -166,6 +180,14 @@ export default function OptimizePage() {
 
   const runOptimization = async () => {
     if (!companyId || !rawRows.length) return
+
+    // Check optimization limit for free users
+    if (!canOptimize) {
+      setLimitMessage(`You've used all ${10} free optimizations. Upgrade to Pro for unlimited optimizations.`)
+      setShowLimitModal(true)
+      return
+    }
+
     setStatus('processing')
     setCurrentStep(0)
     setProcessedRows(0)
@@ -234,6 +256,8 @@ export default function OptimizePage() {
         }
       } as any);
       setStatus('complete')
+      // Record optimization for subscription tracking
+      await recordOptimization(rawRows.length)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unexpected error during optimization'
       console.error('[OPTIMIZE] Error:', msg)
@@ -650,6 +674,13 @@ export default function OptimizePage() {
           )}
         </div>
       </div>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        show={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        reason={limitMessage}
+      />
     </div>
   )
 }

@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
-import { Check, Eye, EyeOff, Copy } from 'lucide-react'
+import { useSubscription } from '@/context/SubscriptionContext'
+import { Check, Eye, EyeOff, Copy, Crown } from 'lucide-react'
 
 const TABS = ['Profile', 'Company', 'Notifications', 'Billing', 'API Keys']
 const INDUSTRIES = ['E-Commerce', 'Retail', 'Manufacturing', 'Healthcare', 'Food & Beverage', 'Electronics', 'Fashion', 'Other']
@@ -38,6 +39,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export default function SettingsPage() {
   const { userData, firebaseUser, refreshUser } = useUser()
+  const { subscription, isPro, isFree, optimizationsRemaining, refreshSubscription } = useSubscription()
   const [activeTab, setActiveTab] = useState('Profile')
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
@@ -55,9 +57,6 @@ export default function SettingsPage() {
 
   // Notifications state
   const [notifs, setNotifs] = useState<Record<string, boolean>>({})
-
-  // Subscription state
-  const [subscription, setSubscription] = useState<{ plan: string; current_usage: number; monthly_shipment_limit: number | null } | null>(null)
 
   // API key state
   const [apiKey, setApiKey] = useState('sk-shipzi-xxxx-xxxx-A1B2')
@@ -84,10 +83,6 @@ export default function SettingsPage() {
     }
     const savedNotifs = (userData as unknown as Record<string, unknown>).notification_preferences as Record<string, boolean> | null
     setNotifs(savedNotifs ?? Object.fromEntries(NOTIFICATION_KEYS.map(k => [k, false])))
-    if (userData.company_id) {
-      const { data: sub } = await supabase.from('subscriptions').select('plan, current_usage, monthly_shipment_limit').eq('company_id', userData.company_id).single()
-      if (sub) setSubscription(sub)
-    }
   }, [userData])
 
   useEffect(() => { loadData() }, [loadData])
@@ -164,7 +159,7 @@ export default function SettingsPage() {
     }))
   }
 
-  const usagePct = subscription ? Math.round(((subscription.current_usage ?? 0) / (subscription.monthly_shipment_limit ?? 100)) * 100) : 0
+  const usagePct = subscription ? Math.round(((subscription.total_optimizations ?? 0) / (subscription.monthly_optimization_limit ?? 10)) * 100) : 0
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -323,12 +318,22 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                   {/* Current Plan */}
                   <div className="glass-card p-6">
-                    <h2 className="font-syne font-bold text-white mb-4">Current Plan</h2>
                     <div className="flex items-center gap-3 mb-4">
-                      <span className="status-badge badge-optimized uppercase">{subscription?.plan ?? 'Free'}</span>
+                      <Crown size={20} color={isPro ? 'var(--accent-success)' : 'var(--text-muted)'} />
+                      <h2 className="font-syne font-bold text-white">Current Plan</h2>
+                    </div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className={`status-badge ${isPro ? 'badge-delivered' : 'badge-optimized'} uppercase`}>
+                        {subscription?.plan ?? 'Free'}
+                      </span>
+                      {isFree && (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {optimizationsRemaining} of 10 free optimizations remaining
+                        </span>
+                      )}
                     </div>
                     <div className="mb-2 flex justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      <span>{subscription?.current_usage ?? 0} of {subscription?.monthly_shipment_limit ?? 100} shipments used</span>
+                      <span>{subscription?.total_optimizations ?? 0} of {subscription?.monthly_optimization_limit ?? 10} optimizations used</span>
                       <span>{usagePct}%</span>
                     </div>
                     <div className="h-2 rounded-full" style={{ background: 'var(--border-subtle)' }}>
@@ -336,42 +341,72 @@ export default function SettingsPage() {
                         style={{ width: `${usagePct}%`, background: usagePct > 80 ? 'var(--accent-warning)' : 'var(--accent-primary)' }} />
                     </div>
                     {usagePct > 80 && <p className="text-xs mt-2" style={{ color: 'var(--accent-warning)' }}>⚠ Approaching monthly limit — consider upgrading</p>}
+
+                    {isFree && (
+                      <div className="mt-4 p-3 rounded-xl" style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.2)' }}>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          Free plan: 10 optimizations/month, 50 rows/upload. Upgrade to Pro for unlimited.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Upgrade Plans */}
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { plan: 'Growth', price: '$149/mo', features: ['5,000 shipments', '10 users', 'Full AI', 'Analytics'] },
-                      { plan: 'Enterprise', price: 'Custom', features: ['Unlimited', 'SSO', 'API access', 'Dedicated support'] },
+                      { plan: 'Pro', price: '$149/mo', features: ['Unlimited optimizations', '10,000 rows/upload', 'Full AI optimization', 'Advanced analytics', 'ESG reports', 'Priority support'], highlighted: isPro },
+                      { plan: 'Enterprise', price: 'Custom', features: ['Everything in Pro', 'SSO & SAML', 'API access', 'Dedicated support', 'Custom integrations', 'SLA guarantee'], highlighted: false },
                     ].map(p => (
-                      <div key={p.plan} className="glass-card p-5">
+                      <div key={p.plan} className="glass-card p-5 relative overflow-hidden"
+                        style={p.highlighted ? { border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
+                        {p.highlighted && (
+                          <div className="absolute top-0 right-0 px-2 py-0.5 text-xs font-medium rounded-bl-lg"
+                            style={{ background: 'var(--accent-success)', color: 'white' }}>
+                            Current
+                          </div>
+                        )}
                         <h3 className="font-syne font-bold text-white mb-1">{p.plan}</h3>
                         <p className="font-bold text-xl mb-3" style={{ color: 'var(--accent-primary)' }}>{p.price}</p>
-                        <ul className="space-y-1 mb-4">
+                        <ul className="space-y-1.5 mb-4">
                           {p.features.map(f => <li key={f} className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--accent-success)' }}>✓</span>{f}</li>)}
                         </ul>
-                        <button onClick={() => setToast('Coming soon — contact sales@shipzi.com')} className="btn-ghost w-full text-sm" style={{ padding: '8px' }}>
-                          {p.plan === 'Enterprise' ? 'Contact Sales' : 'Upgrade'}
+                        <button onClick={() => setToast(p.highlighted ? 'You are on this plan' : 'Coming soon — contact sales@shipzi.com')}
+                          className={`${p.highlighted ? 'btn-ghost' : 'btn-ghost'} w-full text-sm`}
+                          style={{ padding: '8px' }}
+                          disabled={p.highlighted}>
+                          {p.highlighted ? 'Current Plan' : p.plan === 'Enterprise' ? 'Contact Sales' : 'Upgrade'}
                         </button>
                       </div>
                     ))}
                   </div>
 
-                  {/* Invoice History */}
+                  {/* Plan Comparison */}
                   <div className="glass-card p-6">
-                    <h3 className="font-syne font-semibold text-white mb-4">Invoice History</h3>
+                    <h3 className="font-syne font-semibold text-white mb-4">Plan Comparison</h3>
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          {['Date', 'Plan', 'Amount', 'Status'].map(h => (
+                          {['Feature', 'Free', 'Pro', 'Enterprise'].map(h => (
                             <th key={h} className="text-left py-2 pr-4 text-xs uppercase" style={{ color: 'var(--text-muted)' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {[['Jan 2026', 'Free', '$0.00', 'Paid'], ['Dec 2025', 'Free', '$0.00', 'Paid'], ['Nov 2025', 'Free', '$0.00', 'Paid']].map((row, i) => (
+                        {[
+                          ['Optimizations/month', '10', 'Unlimited', 'Unlimited'],
+                          ['Rows per upload', '50', '10,000', 'Unlimited'],
+                          ['AI Optimization', 'Basic', 'Advanced', 'Advanced + Custom'],
+                          ['Analytics', 'Basic', 'Advanced', 'Advanced + Export'],
+                          ['Sustainability Reports', '—', '✓', '✓ + Custom ESG'],
+                          ['Support', 'Community', 'Priority', 'Dedicated'],
+                        ].map((row, i) => (
                           <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                            {row.map((cell, j) => <td key={j} className="py-3 pr-4 text-xs" style={{ color: j === 3 ? 'var(--accent-success)' : 'var(--text-secondary)' }}>{cell}</td>)}
+                            {row.map((cell, j) => (
+                              <td key={j} className="py-3 pr-4 text-xs"
+                                style={{ color: j === 0 ? 'var(--text-primary)' : cell === '✓' || cell === '✓ + Custom ESG' ? 'var(--accent-success)' : 'var(--text-secondary)' }}>
+                                {cell}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
