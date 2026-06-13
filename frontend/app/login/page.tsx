@@ -131,7 +131,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-10">
-            <Image src="/shipzi-logo.png" alt="Shipzi" width={40} height={40} className="object-contain" priority />
+            <Image src="/shipzi-logo.svg" alt="Shipzi" width={40} height={40} className="object-contain" priority />
             <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
           </div>
 

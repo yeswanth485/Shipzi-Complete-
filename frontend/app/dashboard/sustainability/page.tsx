@@ -69,12 +69,28 @@ export default function SustainabilityPage() {
     if (!companyId) return
     ;(async () => {
       try {
+        // Get the latest completed run
+        const { data: latestRun } = await supabase
+          .from('optimization_runs')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('status', 'complete')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        let ordQuery = supabase.from('optimized_orders')
+          .select('sustainability_score, savings_usd, created_at, recommended_box_id')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: true })
+          .limit(5000)
+
+        if (latestRun?.id) {
+          ordQuery = ordQuery.eq('run_id', latestRun.id)
+        }
+
         const [{ data: o, error: oErr }, { data: boxes, error: boxErr }] = await Promise.all([
-          supabase.from('optimized_orders')
-            .select('sustainability_score, savings_usd, created_at, recommended_box_id')
-            .eq('company_id', companyId)
-            .order('created_at', { ascending: true })
-            .limit(5000),
+          ordQuery,
           supabase.from('box_catalog')
             .select('id, material_type')
             .eq('company_id', companyId),

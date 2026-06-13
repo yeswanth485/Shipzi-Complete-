@@ -108,12 +108,28 @@ export default function DashboardPage() {
     if (!companyId) return
     ;(async () => {
       try {
+        // Get the latest completed run
+        const { data: latestRun } = await supabase
+          .from('optimization_runs')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('status', 'complete')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        let ordQuery = supabase.from('optimized_orders')
+          .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status,recommended_box_id,used_box_length_cm,used_box_width_cm,used_box_height_cm')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(2000)
+
+        if (latestRun?.id) {
+          ordQuery = ordQuery.eq('run_id', latestRun.id)
+        }
+
         const [{ data: ord, error: ordErr }, { data: boxes, error: boxErr }] = await Promise.all([
-          supabase.from('optimized_orders')
-            .select('savings_usd,utilization_pct,sustainability_score,created_at,product_name,fit_status,recommended_box_id,used_box_length_cm,used_box_width_cm,used_box_height_cm')
-            .eq('company_id', companyId)
-            .order('created_at', { ascending: false })
-            .limit(2000),
+          ordQuery,
           supabase.from('box_catalog')
             .select('id, box_name')
             .eq('company_id', companyId),

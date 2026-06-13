@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB"/>
+      <stop offset="100%" style="stop-color:#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EF4444"/>
+      <stop offset="100%" style="stop-color:#DC2626"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- S shape - top part -->
+  <path d="M35 25 C35 18, 50 15, 55 15 L70 15 C75 15, 80 18, 80 25 L80 35 C80 38, 75 40, 70 40 L55 40 L55 50 L75 50 C82 50, 85 55, 85 60 L85 70 C85 77, 75 80, 70 80 L55 80 C50 80, 35 77, 35 70 L35 60 C35 57, 40 55, 45 55 L55 55 L55 45 L40 45 C35 45, 30 40, 30 35 L30 25 Z" 
+        fill="url(#blueGrad)" opacity="0.95"/>
+  
+  <!-- Red box -->
+  <rect x="42" y="85" width="36" height="28" rx="3" fill="url(#redGrad)"/>
+  
+  <!-- Box tape -->
+  <line x1="60" y1="85" x2="60" y2="113" stroke="#FCA5A5" stroke-width="2.5"/>
+  <line x1="42" y1="95" x2="78" y2="95" stroke="#FCA5A5" stroke-width="2"/>
+  
+  <!-- Box flap highlights -->
+  <path d="M42 85 L60 85 L60 92 L42 92 Z" fill="#DC2626" opacity="0.3"/>
+  <path d="M60 85 L78 85 L78 92 L60 92 Z" fill="#B91C1C" opacity="0.2"/>
+</svg>

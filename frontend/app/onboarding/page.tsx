@@ -171,7 +171,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 justify-center mb-10">
-          <Image src="/shipzi-logo.png" alt="Shipzi" width={36} height={36} className="object-contain" />
+          <Image src="/shipzi-logo.svg" alt="Shipzi" width={36} height={36} className="object-contain" />
           <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
         </div>
 

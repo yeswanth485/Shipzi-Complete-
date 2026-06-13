@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Shipzi — AI Packaging Intelligence',
     description: 'Optimize every shipment. Reduce every cost.',
-    images: ['/shipzi-logo.png'],
+    images: ['/shipzi-logo.svg'],
   },
 }
 

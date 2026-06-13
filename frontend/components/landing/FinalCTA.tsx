@@ -144,7 +144,7 @@ export default function FinalCTA() {
             {/* Brand */}
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Image src="/shipzi-logo.png" alt="Shipzi" width={36} height={36} className="object-contain" />
+                <Image src="/shipzi-logo.svg" alt="Shipzi" width={36} height={36} className="object-contain" />
                 <span className="font-syne font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
               </div>
               <p className="text-sm mb-1" style={{ color: 'var(--text-secondary)' }}>AI-Powered Logistics Intelligence</p>

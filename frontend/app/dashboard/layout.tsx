@@ -11,7 +11,7 @@ import { useUser } from '@/context/UserContext'
 import { SubscriptionProvider, useSubscription } from '@/context/SubscriptionContext'
 import UpgradeModal from '@/components/UpgradeModal'
 import {
-  LayoutDashboard, Zap, Package, Truck, Box, BarChart3, Leaf, Settings,
+  LayoutDashboard, Zap, Package, Truck, Box, BarChart3, Leaf, Settings, Clock,
   Menu, X, Bell, Search, LogOut, ChevronDown, Crown
 } from 'lucide-react'
 
@@ -20,6 +20,7 @@ const navItems = [
   { href: '/dashboard/optimize', label: 'Optimize', icon: Zap },
   { href: '/dashboard/orders', label: 'Orders', icon: Package },
   { href: '/dashboard/shipments', label: 'Shipments', icon: Truck },
+  { href: '/dashboard/history', label: 'History', icon: Clock },
   { href: '/dashboard/box-catalog', label: 'Box Catalog', icon: Box },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/dashboard/sustainability', label: 'Sustainability', icon: Leaf },
@@ -31,6 +32,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/optimize': 'Optimize Shipments',
   '/dashboard/orders': 'Optimized Orders',
   '/dashboard/shipments': 'Shipments',
+  '/dashboard/history': 'Optimization History',
   '/dashboard/box-catalog': 'Box Catalog',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/sustainability': 'Sustainability',
@@ -63,7 +65,7 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
       <div className="flex items-center justify-between px-6 h-[72px] flex-shrink-0"
         style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <Link href="/dashboard" className="flex items-center gap-3">
-          <Image src="/shipzi-logo.png" alt="Shipzi" width={36} height={36} className="object-contain" />
+          <Image src="/shipzi-logo.svg" alt="Shipzi" width={36} height={36} className="object-contain" />
           <span className="font-syne font-bold text-xl" style={{ color: 'var(--text-primary)' }}>Shipzi</span>
         </Link>
         {mobile && (
@@ -230,14 +232,25 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           </button>
 
           {/* Plan Badge in top bar */}
-          <span className="text-xs px-2.5 py-1 rounded-full font-medium hidden md:block"
-            style={{
-              background: isPro ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.05)',
-              color: isPro ? 'var(--accent-success)' : 'var(--text-muted)',
-              border: `1px solid ${isPro ? 'rgba(16,185,129,0.3)' : 'var(--border-subtle)'}`,
-            }}>
-            {isPro ? 'Pro' : 'Free'}
-          </span>
+          {!isPro && (
+            <Link href="/dashboard/settings" className="text-xs px-3 py-1.5 rounded-full font-medium hidden md:block transition-all duration-200"
+              style={{
+                background: 'linear-gradient(135deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.15) 100%)',
+                color: 'var(--accent-primary)',
+                border: '1px solid rgba(37,99,235,0.4)',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-primary)'; e.currentTarget.style.color = 'white' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.15) 100%)'; e.currentTarget.style.color = 'var(--accent-primary)' }}>
+              ⚡ Upgrade
+            </Link>
+          )}
+          {isPro && (
+            <span className="text-xs px-2.5 py-1 rounded-full font-medium hidden md:block"
+              style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--accent-success)', border: '1px solid rgba(16,185,129,0.3)' }}>
+              Pro
+            </span>
+          )}
 
           <span className="text-sm hidden md:block" style={{ color: 'var(--text-muted)' }}>{userData?.companies?.name}</span>
 

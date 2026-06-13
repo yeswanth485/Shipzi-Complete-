@@ -52,12 +52,28 @@ export default function AnalyticsPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      const { data: ords, error: ordErr } = await supabase
+      // Get the latest completed run
+      const { data: latestRun } = await supabase
+        .from('optimization_runs')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('status', 'complete')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      let query = supabase
         .from('optimized_orders')
         .select('savings_usd,utilization_pct,sustainability_score,created_at,fit_status,recommended_box_id')
         .eq('company_id', companyId)
         .order('created_at', { ascending: true })
         .limit(5000)
+
+      if (latestRun?.id) {
+        query = query.eq('run_id', latestRun.id)
+      }
+
+      const { data: ords, error: ordErr } = await query
       
       if (ordErr) console.error("Orders fetch error:", ordErr)
       setOrders((ords as OptimizedOrderRow[]) ?? [])

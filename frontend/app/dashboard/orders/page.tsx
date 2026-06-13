@@ -64,7 +64,18 @@ export default function OrdersPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      // First get the latest completed run
+      const { data: latestRun } = await supabase
+        .from('optimization_runs')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('status', 'complete')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      // Fetch orders for the latest run only
+      let query = supabase
         .from('optimized_orders')
         .select(`
           *,
@@ -75,6 +86,12 @@ export default function OrdersPage() {
         `)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
+
+      if (latestRun?.id) {
+        query = query.eq('run_id', latestRun.id)
+      }
+
+      const { data, error } = await query
 
       if (error) console.error("Orders fetch error:", error)
       if (!error) {
