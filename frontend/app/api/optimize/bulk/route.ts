@@ -4,7 +4,7 @@ import { bulkOptimize, buildOrderInsertRows, chunkArray, parseMultiProductRow, s
 import { CSVRow, CatalogBox } from '@/lib/types'
 import crypto from 'crypto'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 export async function POST(req: Request) {
   try {

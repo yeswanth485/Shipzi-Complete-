@@ -175,8 +175,11 @@ def root():
     return jsonify({
         "service": "Shipzi ML Bridge",
         "version": "1.0.0",
+        "models_loaded": models_loaded,
+        "models_count": len(models),
         "endpoints": {
             "health": "/ml/health",
+            "ping": "/ml/ping",
             "single": "POST /ml/single",
             "multi": "POST /ml/multi",
             "bulk": "POST /ml/bulk"
@@ -184,13 +187,6 @@ def root():
     }), 200
 
 @app.route('/health', methods=['GET'])
-def health_root():
-    return jsonify({
-        "status": "healthy",
-        "models_loaded": len(models),
-        "version": "1.0.0"
-    }), 200
-
 @app.route('/ml/health', methods=['GET'])
 def health():
     status = "healthy" if models_loaded else "degraded"
@@ -200,6 +196,11 @@ def health():
         "all_required_loaded": models_loaded,
         "version": "1.0.0"
     }), 200
+
+@app.route('/ml/ping', methods=['GET'])
+def ping():
+    """Lightweight keep-alive endpoint — does NOT access models dict."""
+    return jsonify({"pong": True}), 200
 
 @app.route('/ml/single', methods=['POST'])
 def single_optimize():

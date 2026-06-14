@@ -57,7 +57,7 @@ export async function checkMLBridge(): Promise<{ connected: boolean; url: string
   const enabled = isMLEnabled()
   if (!enabled) return { connected: false, url, status: 'disabled' }
   try {
-    const res = await fetchWithRetry(`${url}/ml/health`, { signal: AbortSignal.timeout(10000) }, 1, 2000)
+    const res = await fetchWithRetry(`${url}/ml/health`, { signal: AbortSignal.timeout(30000) }, 1, 3000)
     if (res.ok) {
       const data = await res.json()
       console.log(`[ML] Bridge connected at ${url} — status: ${data.status}, models: ${data.models_loaded}`)
@@ -685,7 +685,7 @@ export async function bulkOptimize(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validRows),
-          signal: AbortSignal.timeout(30000)
+          signal: AbortSignal.timeout(60000)
         }, 2, 5000)
         if (res.ok) {
           const data: MLEnhancement[] = await res.json()
