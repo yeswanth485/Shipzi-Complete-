@@ -21,29 +21,41 @@ export async function GET() {
     return NextResponse.json({ ...debug, connected: false, status: 'disabled' })
   }
 
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
-    const res = await fetch(`${mlUrl}/ml/health`, { signal: controller.signal })
-    clearTimeout(timeoutId)
+  // Try with retries (Render cold start can take 30-60s)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
+      const res = await fetch(`${mlUrl}/ml/health`, { signal: controller.signal })
+      clearTimeout(timeoutId)
 
-    if (res.ok) {
-      const data = await res.json()
+      if (res.ok) {
+        const data = await res.json()
+        return NextResponse.json({
+          ...debug,
+          connected: true,
+          status: data.status,
+          models_loaded: data.models_loaded,
+          all_required_loaded: data.all_required_loaded,
+          attempt,
+        })
+      }
+      return NextResponse.json({ ...debug, connected: false, status: `HTTP ${res.status}`, attempt })
+    } catch (err) {
+      if (attempt < 2) {
+        // Wait 5s before retry (Render might be waking up)
+        await new Promise(r => setTimeout(r, 5000))
+        continue
+      }
       return NextResponse.json({
         ...debug,
-        connected: true,
-        status: data.status,
-        models_loaded: data.models_loaded,
-        all_required_loaded: data.all_required_loaded,
+        connected: false,
+        status: 'unreachable',
+        error: err instanceof Error ? err.message : String(err),
+        attempts: attempt,
       })
     }
-    return NextResponse.json({ ...debug, connected: false, status: `HTTP ${res.status}` })
-  } catch (err) {
-    return NextResponse.json({
-      ...debug,
-      connected: false,
-      status: 'unreachable',
-      error: err instanceof Error ? err.message : String(err),
-    })
   }
+
+  return NextResponse.json({ ...debug, connected: false, status: 'unknown error' })
 }
