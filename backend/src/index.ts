@@ -35,17 +35,40 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 // ── Health check ────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+  let mlBridgeStatus = 'unknown'
+  try {
+    const mlUrl = process.env.ML_BRIDGE_URL || process.env.NEXT_PUBLIC_ML_BRIDGE_URL || 'http://localhost:5001'
+    const mlRes = await fetch(`${mlUrl}/ml/health`, { signal: AbortSignal.timeout(3000) })
+    if (mlRes.ok) {
+      const mlData = await mlRes.json()
+      mlBridgeStatus = mlData.status || 'healthy'
+    } else {
+      mlBridgeStatus = 'error'
+    }
+  } catch {
+    mlBridgeStatus = 'unreachable'
+  }
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     supabaseConnected: !!supabaseUrl && !!supabaseKey,
-  });
+    mlBridge: mlBridgeStatus,
+    version: '2.0',
+  })
 });
 
 // ── Root ────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
-  res.json({ service: 'Shipzi Optimization Engine', version: '2.0' });
+  res.json({
+    service: 'Shipzi Optimization Engine',
+    version: '2.0',
+    endpoints: {
+      health: 'GET /health',
+      optimize: 'POST /api/optimize',
+    },
+  })
 });
 
 // ── Main optimization endpoint ──────────────────────────────────

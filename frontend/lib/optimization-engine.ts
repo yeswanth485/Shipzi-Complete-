@@ -363,6 +363,7 @@ export interface BulkResult {
     no_fit: number
     total_savings: number
     avg_utilization: number
+    ml_used: boolean
   }
 }
 
@@ -375,6 +376,7 @@ export async function bulkOptimize(
   const invalidRows: BulkResult['invalidRows'] = []
 
   const CHUNK = 200  // process in chunks to avoid blocking the main thread
+  let mlUsed = false
 
   for (let i = 0; i < rawRows.length; i += CHUNK) {
     const chunk = rawRows.slice(i, i + CHUNK)
@@ -397,21 +399,30 @@ export async function bulkOptimize(
     let mlResults: Record<number, MLEnhancement> = {}
     if (ML_ENABLED && validRows.length > 0) {
       try {
+        console.log(`[ML] Calling ML bridge at ${ML_API_URL}/ml/bulk for ${validRows.length} rows...`)
         const res = await fetch(`${ML_API_URL}/ml/bulk`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validRows),
-          signal: AbortSignal.timeout(5000)
+          signal: AbortSignal.timeout(15000)
         })
         if (res.ok) {
           const data: MLEnhancement[] = await res.json()
           data.forEach((item, idx) => {
-            mlResults[validRows[idx].row_index] = item
+            if (item && !('error' in item)) {
+              mlResults[validRows[idx].row_index] = item
+            }
           })
+          mlUsed = true
+          console.log(`[ML] ML bridge responded successfully — ${Object.keys(mlResults).length}/${validRows.length} rows enhanced`)
+        } else {
+          console.warn(`[ML] ML bridge returned status ${res.status} — falling back to rule-based optimization`)
         }
       } catch (err) {
-        // Fallback to rule-based silently
+        console.warn(`[ML] ML bridge unreachable at ${ML_API_URL} — falling back to rule-based optimization. Error:`, err instanceof Error ? err.message : err)
       }
+    } else if (!ML_ENABLED) {
+      console.log('[ML] ML bridge disabled via NEXT_PUBLIC_ML_BRIDGE_ENABLED=false — using rule-based optimization')
     }
 
     for (const row of validRows) {
@@ -443,6 +454,8 @@ export async function bulkOptimize(
     ? results.reduce((s, r) => s + r.utilization_pct, 0) / results.length
     : 0
 
+  console.log(`[OPTIMIZE] Complete — ${results.length} rows, ${optimized} optimized, $${totalSavings.toFixed(2)} savings, ML: ${mlUsed ? 'YES' : 'NO'}`)
+
   return {
     results,
     invalidRows,
@@ -455,6 +468,7 @@ export async function bulkOptimize(
       no_fit: noFit,
       total_savings: parseFloat(totalSavings.toFixed(2)),
       avg_utilization: parseFloat(avgUtil.toFixed(1)),
+      ml_used: mlUsed,
     },
   }
 }
@@ -490,6 +504,7 @@ export function buildOrderInsertRows(
     sustainability_score: r.sustainability_score,
     fit_status: r.fit_status,
     optimization_reason: r.optimization_reason,
+    ml_confidence_pct: r.ml_confidence_pct ?? 0,
     ai_explanation: r.ai_explanation ?? null,
     run_row_index: r.row_index,
   }))

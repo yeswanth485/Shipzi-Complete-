@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     }
     if (insertErrors.length > 0 && allInsertedOrders.length === 0) {
       return NextResponse.json(
-        { message: `Failed to save orders to database: ${insertErrors[0]}` },
+        { success: false, message: `Failed to save orders to database: ${insertErrors[0]}` },
         { status: 500 }
       )
     }
@@ -97,11 +97,7 @@ export async function POST(req: Request) {
       const shipmentRows = allInsertedOrders.map((order) => {
         let shipmentStatus = 'pending'
         if (order.fit_status === 'optimized' || order.fit_status === 'same_box') {
-          const rand = Math.random()
-          if (rand > 0.7) shipmentStatus = 'delivered'
-          else if (rand > 0.4) shipmentStatus = 'shipped'
-          else if (rand > 0.1) shipmentStatus = 'packed'
-          else shipmentStatus = 'optimized'
+          shipmentStatus = 'packed'
         }
         return {
           company_id,
@@ -179,10 +175,15 @@ export async function POST(req: Request) {
       sustainability_score: Math.min(100, Math.round(bulkResult.summary.avg_utilization + 20)),
     }, { onConflict: 'company_id,metric_date' })
 
+    console.log(`[API/optimize/bulk] Success — ${bulkResult.summary.valid} rows, ${bulkResult.summary.optimized} optimized, $${bulkResult.summary.total_savings} savings, ML: ${bulkResult.summary.ml_used ? 'YES' : 'NO'}`)
+
     return NextResponse.json({
       success: true,
       run_id,
-      summary: bulkResult.summary,
+      summary: {
+        ...bulkResult.summary,
+        ml_used: bulkResult.summary.ml_used ?? false,
+      },
       invalidRows: bulkResult.invalidRows || [],
       results: bulkResult.results || []
     })

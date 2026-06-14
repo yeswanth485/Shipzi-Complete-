@@ -33,11 +33,14 @@ def load_models():
             print(f"Error loading {f}: {e}")
             raise e
 
+models_loaded = False
 try:
     load_models()
+    models_loaded = True
+    print(f"All {len(REQUIRED_FILES)} model files loaded successfully")
 except Exception as e:
-    print(f"FATAL: Could not load all models. {e}")
-    exit(1)
+    print(f"WARNING: Could not load all models: {e}")
+    print("ML bridge will run in fallback mode — predictions will use heuristic defaults")
 
 def _validate_input(data):
     if not isinstance(data, dict):
@@ -63,10 +66,11 @@ def _validate_input(data):
     return True, None
 
 def _predict_single(product):
-    opt_price = 4.50
     current_price = product.get('used_box_price')
-    recommended_box = "ML_BOX_L"
-    confidence = 98.5
+    recommended_box = None
+    confidence = 0.0
+    opt_price = 4.50
+    model_used = False
     
     try:
         if 'model_classifier.pkl' in models and 'encoders.pkl' in models:
@@ -117,28 +121,36 @@ def _predict_single(product):
                 
             proba = clf.predict_proba(features)[0]
             confidence = round(max(proba) * 100, 1)
-            
+            model_used = True
+                
     except Exception as e:
-        print(f"ML Inference fallback: {e}")
+        print(f"ML inference error: {e}")
+        recommended_box = None
+        confidence = 0.0
 
+    frag = float(product.get('fragility_score', 0))
+    
     if current_price is not None:
         try:
             current_price = float(current_price)
-            saving = max(round(current_price - opt_price, 2), 0)
+            saving = max(round(current_price - opt_price, 2), 0) if model_used else 0
         except ValueError:
-            saving = 6.50
+            saving = 0
     else:
-        saving = 6.50
+        saving = 0
+    
+    tip = "HIGH FRAGILITY: bubble wrap + foam corners." if frag >= 7 else "Standard packaging."
     
     return {
         "recommended_box_name": recommended_box,
         "recommended_box_dims": { "L": 40, "W": 30, "H": 20 },
-        "optimized_box_price": opt_price,
+        "optimized_box_price": opt_price if model_used else current_price,
         "ml_confidence_pct": confidence,
         "savings_usd": saving,
         "is_oversized": False,
-        "fit_status": "optimized",
-        "packaging_tip": "HIGH FRAGILITY: bubble wrap + foam corners." if float(product.get('fragility_score', 0)) >= 7 else "Standard packaging."
+        "fit_status": "optimized" if model_used else "rule_based",
+        "packaging_tip": tip,
+        "model_used": model_used
     }
 
 @app.route('/', methods=['GET'])
@@ -164,9 +176,11 @@ def health_root():
 
 @app.route('/ml/health', methods=['GET'])
 def health():
+    status = "healthy" if models_loaded else "degraded"
     return jsonify({
-        "status": "healthy",
+        "status": status,
         "models_loaded": len(models),
+        "all_required_loaded": models_loaded,
         "version": "1.0.0"
     }), 200
 

@@ -264,6 +264,7 @@ export default function OptimizePage() {
       let allResults: any[] = [];
       let totalSavings = 0;
       let totalOptimized = 0;
+      let mlUsedOverall = false;
 
       for (let i = 0; i < rawRows.length; i += CHUNK_SIZE) {
         const chunk = rawRows.slice(i, i + CHUNK_SIZE);
@@ -284,6 +285,7 @@ export default function OptimizePage() {
         allResults.push(...data.results);
         totalSavings += data.summary.total_savings;
         totalOptimized += data.summary.optimized;
+        if (data.summary.ml_used) mlUsedOverall = true;
         setProcessedRows(Math.min(i + CHUNK_SIZE, rawRows.length));
       }
 
@@ -294,7 +296,8 @@ export default function OptimizePage() {
           total: rawRows.length,
           optimized: totalOptimized,
           total_savings: parseFloat(totalSavings.toFixed(2)),
-          avg_utilization: allResults.length ? parseFloat((allResults.reduce((acc: number, r: any) => acc + r.utilization_pct, 0) / allResults.length).toFixed(1)) : 0
+          avg_utilization: allResults.length ? parseFloat((allResults.reduce((acc: number, r: any) => acc + r.utilization_pct, 0) / allResults.length).toFixed(1)) : 0,
+          ml_used: mlUsedOverall,
         }
       } as any);
       setStatus('complete')
@@ -626,6 +629,19 @@ export default function OptimizePage() {
                 ))}
               </div>
 
+              {/* ML Status Banner */}
+              {bulkResult.summary?.ml_used && (
+                <div className="flex items-center gap-2 p-3 rounded-xl text-xs" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa' }}>
+                  <span className="font-semibold">ML Enhanced</span>
+                  <span>— This optimization used the trained ML model for box recommendations</span>
+                </div>
+              )}
+              {!bulkResult.summary?.ml_used && (
+                <div className="flex items-center gap-2 p-3 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--accent-warning)' }}>
+                  <span>ML model was not available — used rule-based optimization only</span>
+                </div>
+              )}
+
               {/* Invalid rows warning */}
               {(bulkResult.invalidRows?.length ?? 0) > 0 && (
                 <div className="flex items-start gap-3 p-4 rounded-xl"
@@ -657,7 +673,7 @@ export default function OptimizePage() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0" style={{ background: 'var(--bg-surface)' }}>
                       <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        {['Product', 'Original Box', 'Optimized Box', 'Savings', 'Status', ''].map(h => (
+                        {['Product', 'Original Box', 'Optimized Box', 'Savings', 'Status', 'ML', ''].map(h => (
                           <th key={h} className="text-left py-3 px-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
                         ))}
                       </tr>
@@ -697,6 +713,15 @@ export default function OptimizePage() {
                               </span>
                             </td>
                             <td className="py-3 px-4">
+                              {(r.ml_confidence_pct ?? 0) > 0 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}>
+                                  {r.ml_confidence_pct}%
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
                               <Eye size={14} color={expandedRow === i ? 'var(--accent-primary)' : 'var(--text-muted)'} />
                             </td>
                           </tr>
@@ -704,7 +729,7 @@ export default function OptimizePage() {
                           <AnimatePresence>
                             {expandedRow === i && (
                               <tr key={`exp-${r.row_index}`}>
-                                <td colSpan={6} style={{ padding: 0 }}>
+                                <td colSpan={7} style={{ padding: 0 }}>
                                   <motion.div
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
@@ -730,11 +755,23 @@ export default function OptimizePage() {
                                         </div>
                                       </div>
                                       {/* Reason */}
-                                      <div>
+                                       <div>
                                         <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Optimization Reason</p>
                                         <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                           {r.optimization_reason}
                                         </p>
+                                      </div>
+                                    </div>
+                                    <div className="px-6 pb-4">
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <span style={{ color: 'var(--text-muted)' }}>ML Enhanced:</span>
+                                        {(r.ml_confidence_pct ?? 0) > 0 ? (
+                                          <span className="font-medium" style={{ color: '#a78bfa' }}>
+                                            Yes ({r.ml_confidence_pct}% confidence)
+                                          </span>
+                                        ) : (
+                                          <span style={{ color: 'var(--text-muted)' }}>No (rule-based)</span>
+                                        )}
                                       </div>
                                     </div>
                                   </motion.div>
