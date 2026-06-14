@@ -18,6 +18,13 @@ export interface CSVRow {
   // optional extras
   quantity?: string
   weight_kg?: string
+  // multi-product fields (pipe-separated)
+  order_id?: string
+  product_names?: string
+  product_lengths?: string
+  product_widths?: string
+  product_heights?: string
+  product_fragilities?: string
 }
 
 // ── Parsed & validated product row ──
@@ -85,6 +92,10 @@ export interface OptimizationResult {
   recommended_box: CatalogBox | null
   // error
   error_message?: string
+  // multi-product fields
+  product_names?: string
+  product_count?: number
+  order_id?: string
 }
 
 // ── Optimization run summary ──

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { bulkOptimize, buildOrderInsertRows, chunkArray } from '@/lib/optimization-engine'
+import { bulkOptimize, buildOrderInsertRows, chunkArray, parseMultiProductRow, selectOptimalBoxMultiProduct } from '@/lib/optimization-engine'
 import { CSVRow, CatalogBox } from '@/lib/types'
 import crypto from 'crypto'
 
@@ -31,42 +31,77 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'No active boxes in catalog' }, { status: 400 })
     }
 
-    let processedRows: CSVRow[] = []
+    // ── Run optimization based on mode ──
+    let bulkResult: any
 
     if (mode === 'multi') {
-      for (const row of rows) {
-        if (!row.product_names) continue
-        const names = row.product_names.split('|')
-        const lengths = row.product_lengths.split('|')
-        const widths = row.product_widths.split('|')
-        const heights = row.product_heights.split('|')
-        const fragilities = row.product_fragilities ? row.product_fragilities.split('|') : []
+      // ══════════════════════════════════════════════════════════════
+      // MULTI-PRODUCT: Each row = one ORDER with multiple products
+      // Optimize ONE BOX for ALL products in the order together
+      // ══════════════════════════════════════════════════════════════
+      const multiResults: any[] = []
 
-        if (lengths.length !== names.length || widths.length !== names.length || heights.length !== names.length) {
-          console.warn('Mismatched pipe-delimited fields for row', row)
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx]
+        const orderId = row.order_id || `ORD-${idx + 1}`
+
+        const products = parseMultiProductRow(row)
+        if (!products || products.length === 0) {
+          console.warn('[MULTI] Skipping row — no valid products:', orderId)
           continue
         }
 
-        for (let i = 0; i < names.length; i++) {
-          processedRows.push({
-            product_name: names[i],
-            product_length: lengths[i],
-            product_width: widths[i],
-            product_height: heights[i],
-            fragility_score: fragilities[i] || '0',
-            used_box_length: row.used_box_length,
-            used_box_width: row.used_box_width,
-            used_box_height: row.used_box_height,
-            used_box_price: row.used_box_price,
-            shipping_zone: row.shipping_zone,
-          })
-        }
-      }
-    } else {
-      processedRows = rows
-    }
+        console.log(`[MULTI] Order ${orderId}: ${products.length} products → 1 box`)
 
-    const bulkResult = await bulkOptimize(processedRows, catalog as CatalogBox[])
+        const result = selectOptimalBoxMultiProduct(
+          orderId,
+          products,
+          parseFloat(row.used_box_length),
+          parseFloat(row.used_box_width),
+          parseFloat(row.used_box_height),
+          parseFloat(row.used_box_price),
+          row.shipping_zone,
+          catalog as CatalogBox[],
+        )
+
+        multiResults.push({
+          ...result,
+          order_id: orderId,
+          product_names: products.map(p => p.name).join('|'),
+          product_count: products.length,
+        })
+      }
+
+      const optimized = multiResults.filter(r => r.fit_status === 'optimized').length
+      const sameBox = multiResults.filter(r => r.fit_status === 'same_box').length
+      const noFit = multiResults.filter(r => r.fit_status === 'no_fit').length
+      const totalSavings = multiResults.reduce((s, r) => s + r.savings, 0)
+      const avgUtil = multiResults.length
+        ? multiResults.reduce((s, r) => s + r.utilization_pct, 0) / multiResults.length
+        : 0
+
+      bulkResult = {
+        results: multiResults,
+        invalidRows: [],
+        summary: {
+          total: rows.length,
+          valid: multiResults.length,
+          invalid: rows.length - multiResults.length,
+          optimized,
+          same_box: sameBox,
+          no_fit: noFit,
+          total_savings: parseFloat(totalSavings.toFixed(2)),
+          avg_utilization: parseFloat(avgUtil.toFixed(1)),
+          ml_used: false,
+        },
+      }
+
+    } else {
+      // ══════════════════════════════════════════════════════════════
+      // SINGLE-PRODUCT: Each row = one product → optimize individually
+      // ══════════════════════════════════════════════════════════════
+      bulkResult = await bulkOptimize(rows as CSVRow[], catalog as CatalogBox[])
+    }
 
     // ── 1. Insert optimized orders ──
     const insertRows = buildOrderInsertRows(bulkResult.results, run_id, company_id)
@@ -117,7 +152,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── 3. Update optimization run status (Accumulate) ──
+    // ── 3. Update optimization run status ──
     const { data: currentRun } = await supabase.from('optimization_runs').select('total_products, total_savings_usd').eq('id', run_id).single();
     await supabase.from('optimization_runs').update({
       total_products: (currentRun?.total_products || 0) + bulkResult.summary.total,

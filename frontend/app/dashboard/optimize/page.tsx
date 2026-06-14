@@ -694,6 +694,11 @@ export default function OptimizePage() {
                             onMouseLeave={e => { if (expandedRow !== i) e.currentTarget.style.background = 'transparent' }}>
                             <td className="py-3 px-4 font-medium max-w-[140px]" style={{ color: 'var(--text-primary)' }}>
                               <div className="truncate">{r.product_name}</div>
+                              {(r.product_count ?? 0) > 1 && (
+                                <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--accent-secondary)' }}>
+                                  {r.product_count} products in 1 box
+                                </div>
+                              )}
                             </td>
                             <td className="py-3 px-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
                               <div>{r.original_box_dimensions}cm</div>
@@ -756,24 +761,43 @@ export default function OptimizePage() {
                                           ))}
                                         </div>
                                       </div>
+                                      {/* Products in this box (multi-product only) */}
+                                      {r.product_names && (
+                                        <div>
+                                          <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>
+                                            Products in Box ({r.product_count ?? r.product_names?.split('|').length ?? 0})
+                                          </p>
+                                          <div className="space-y-1 text-xs">
+                                            {(r.product_names ?? '').split('|').map((name: string, pi: number) => (
+                                              <div key={pi} className="flex items-center gap-1.5">
+                                                <span style={{ color: 'var(--accent-secondary)' }}>•</span>
+                                                <span style={{ color: 'var(--text-secondary)' }}>{name}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="px-6 pb-4 grid grid-cols-2 gap-4">
                                       {/* Reason */}
-                                       <div>
+                                      <div>
                                         <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'var(--text-muted)' }}>Optimization Reason</p>
                                         <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                           {r.optimization_reason}
                                         </p>
                                       </div>
-                                    </div>
-                                    <div className="px-6 pb-4">
-                                      <div className="flex items-center gap-2 text-xs">
-                                        <span style={{ color: 'var(--text-muted)' }}>ML Enhanced:</span>
-                                        {(r.ml_confidence_pct ?? 0) > 0 ? (
-                                          <span className="font-medium" style={{ color: '#a78bfa' }}>
-                                            Yes ({r.ml_confidence_pct}% confidence)
-                                          </span>
-                                        ) : (
-                                          <span style={{ color: 'var(--text-muted)' }}>No (rule-based)</span>
-                                        )}
+                                      {/* ML status */}
+                                      <div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <span style={{ color: 'var(--text-muted)' }}>ML Enhanced:</span>
+                                          {(r.ml_confidence_pct ?? 0) > 0 ? (
+                                            <span className="font-medium" style={{ color: '#a78bfa' }}>
+                                              Yes ({r.ml_confidence_pct}% confidence)
+                                            </span>
+                                          ) : (
+                                            <span style={{ color: 'var(--text-muted)' }}>No (rule-based)</span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </motion.div>
