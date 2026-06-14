@@ -6,6 +6,47 @@ import crypto from 'crypto'
 
 export const maxDuration = 120
 
+// ── Runtime ML bridge helpers ──
+function getMLBridgeUrl(): string {
+  return process.env.ML_BRIDGE_URL
+    || process.env.NEXT_PUBLIC_ML_BRIDGE_URL
+    || 'https://shipzi-complete-ml-engine.onrender.com'
+}
+
+function isMLEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
+}
+
+async function callMLBulk(products: any[]): Promise<Record<number, any>> {
+  if (!isMLEnabled() || products.length === 0) return {}
+  const url = getMLBridgeUrl()
+  try {
+    console.log(`[ML] Multi-product: calling ${url}/ml/bulk for ${products.length} products`)
+    const res = await fetch(`${url}/ml/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(products),
+      signal: AbortSignal.timeout(60000),
+    })
+    if (!res.ok) {
+      console.warn(`[ML] Multi-product bulk returned ${res.status}`)
+      return {}
+    }
+    const data: any[] = await res.json()
+    const results: Record<number, any> = {}
+    data.forEach((item: any, idx: number) => {
+      if (item && !item.error && item.model_used) {
+        results[products[idx]._rowIdx] = item
+      }
+    })
+    console.log(`[ML] Multi-product: ${Object.keys(results).length}/${products.length} products got ML recommendations`)
+    return results
+  } catch (err) {
+    console.warn(`[ML] Multi-product ML call failed:`, err instanceof Error ? err.message : err)
+    return {}
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -41,6 +82,42 @@ export async function POST(req: Request) {
       // ══════════════════════════════════════════════════════════════
       const multiResults: any[] = []
 
+      // Collect ALL products from ALL orders for a single ML bulk call
+      const allMLProducts: any[] = []
+      const orderProductMap: Map<number, { orderIdx: number; productIdx: number }> = new Map()
+      let productCounter = 0
+
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx]
+        const products = parseMultiProductRow(row)
+        if (!products || products.length === 0) continue
+
+        for (let pi = 0; pi < products.length; pi++) {
+          allMLProducts.push({
+            _rowIdx: productCounter,
+            product_name: products[pi].name,
+            product_length: products[pi].length,
+            product_width: products[pi].width,
+            product_height: products[pi].height,
+            fragility_score: products[pi].fragility,
+            used_box_price: parseFloat(row.used_box_price),
+            shipping_zone: row.shipping_zone,
+          })
+          orderProductMap.set(productCounter, { orderIdx: idx, productIdx: pi })
+          productCounter++
+        }
+      }
+
+      // Call ML bridge once for all products
+      console.log(`[MULTI] Total products across all orders: ${allMLProducts.length}`)
+      const mlResults = await callMLBulk(allMLProducts)
+      const mlUsed = Object.keys(mlResults).length > 0
+      if (mlUsed) {
+        console.log(`[MULTI] ML bridge responded — ${Object.keys(mlResults).length} products enhanced`)
+      }
+
+      // Now optimize each order
+      let mlIdx = 0
       for (let idx = 0; idx < rows.length; idx++) {
         const row = rows[idx]
         const orderId = row.order_id || `ORD-${idx + 1}`
@@ -49,6 +126,15 @@ export async function POST(req: Request) {
         if (!products || products.length === 0) {
           console.warn('[MULTI] Skipping row — no valid products:', orderId)
           continue
+        }
+
+        // Collect ML results for this order's products
+        const orderMLResults: Record<number, any> = {}
+        for (let pi = 0; pi < products.length; pi++) {
+          if (mlResults[mlIdx]) {
+            orderMLResults[pi] = mlResults[mlIdx]
+          }
+          mlIdx++
         }
 
         console.log(`[MULTI] Order ${orderId}: ${products.length} products → 1 box`)
@@ -62,6 +148,7 @@ export async function POST(req: Request) {
           parseFloat(row.used_box_price),
           row.shipping_zone,
           catalog as CatalogBox[],
+          orderMLResults,
         )
 
         multiResults.push({
@@ -92,7 +179,7 @@ export async function POST(req: Request) {
           no_fit: noFit,
           total_savings: parseFloat(totalSavings.toFixed(2)),
           avg_utilization: parseFloat(avgUtil.toFixed(1)),
-          ml_used: false,
+          ml_used: mlUsed,
         },
       }
 

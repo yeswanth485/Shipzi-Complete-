@@ -462,6 +462,7 @@ export function selectOptimalBoxMultiProduct(
   usedBoxPrice: number,
   shippingZone: string,
   catalog: CatalogBox[],
+  mlResults?: Record<number, MLEnhancement>,
 ): OptimizationResult {
   const { combinedLength, combinedWidth, combinedHeight, maxFragility, productCount, productNames } =
     computeCombinedDimensions(products)
@@ -606,9 +607,20 @@ export function selectOptimalBoxMultiProduct(
   const fitStatus: FitStatus = isSameBox ? 'same_box' : 'optimized'
   const volReductionPct = Math.round((1 - bestBoxVol / originalBoxVol) * 100)
 
+  // Compute ML metadata from individual product recommendations
+  let mlEnhanced = false
+  let mlConfidence: number | undefined
+  let mlTip: string | undefined
+  if (mlResults && Object.keys(mlResults).length > 0) {
+    const values = Object.values(mlResults)
+    mlEnhanced = true
+    mlConfidence = values.reduce((s, r) => s + (r.ml_confidence_pct || 0), 0) / values.length
+    mlTip = values.map((r: any) => r.packaging_tip).filter(Boolean).join(' ')
+  }
+
   const reason = fitStatus === 'optimized'
-    ? `Multi-product box: ${productCount} items (${productNames}) packed into ${bestBoxDims}cm (${bestBoxVol}cm³) — ${volReductionPct}% smaller than ${originalBoxDims}cm (${originalBoxVol}cm³). Savings $${savings.toFixed(2)} (box $${usedBoxPrice.toFixed(2)}→$${best.box.cost_per_box_usd.toFixed(2)} + shipping).`
-    : `Current box is already optimal for ${productCount} products combined.`
+    ? `Multi-product box: ${productCount} items (${productNames}) packed into ${bestBoxDims}cm (${bestBoxVol}cm³) — ${volReductionPct}% smaller than ${originalBoxDims}cm (${originalBoxVol}cm³). Savings $${savings.toFixed(2)} (box $${usedBoxPrice.toFixed(2)}→$${best.box.cost_per_box_usd.toFixed(2)} + shipping).${mlEnhanced ? ' ML-enhanced selection.' : ''}`
+    : `Current box is already optimal for ${productCount} products combined.${mlEnhanced ? ' ML-verified.' : ''}`
 
   return {
     row_index: 0,
@@ -626,6 +638,9 @@ export function selectOptimalBoxMultiProduct(
     utilization_pct: parseFloat(best.utilization.toFixed(1)),
     dimensional_weight_kg: best.dimWeight,
     sustainability_score: best.box.sustainability_score,
+    ml_confidence_pct: mlConfidence,
+    ml_enhanced: mlEnhanced,
+    ai_explanation: mlTip,
     parsed_product: {
       product_name: orderId,
       product_length: combinedLength,
