@@ -23,13 +23,22 @@ export interface MLEnhancement {
   packaging_tip: string
 }
 
-const ML_API_URL = process.env.ML_BRIDGE_URL || process.env.NEXT_PUBLIC_ML_BRIDGE_URL || 'http://localhost:5001'
-const ML_ENABLED = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
+// ── Runtime env reads (NOT build-time inlined) ─────────────────────
+function getMLBridgeUrl(): string {
+  return process.env.ML_BRIDGE_URL
+    || process.env.NEXT_PUBLIC_ML_BRIDGE_URL
+    || 'http://localhost:5001'
+}
+
+function isMLEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
+}
 
 export async function checkMLBridge(): Promise<boolean> {
-  if (!ML_ENABLED) return false
+  if (!isMLEnabled()) return false
+  const url = getMLBridgeUrl()
   try {
-    const res = await fetch(`${ML_API_URL}/ml/health`, { signal: AbortSignal.timeout(2000) })
+    const res = await fetch(`${url}/ml/health`, { signal: AbortSignal.timeout(2000) })
     if (res.ok) {
       console.log('ML bridge connected ✅')
       return true
@@ -42,9 +51,10 @@ export async function checkMLBridge(): Promise<boolean> {
 }
 
 export async function mlEnhance(product: ParsedProduct): Promise<MLEnhancement | null> {
-  if (!ML_ENABLED) return null
+  if (!isMLEnabled()) return null
+  const url = getMLBridgeUrl()
   try {
-    const res = await fetch(`${ML_API_URL}/ml/single`, {
+    const res = await fetch(`${url}/ml/single`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
@@ -390,11 +400,14 @@ export async function bulkOptimize(
     }
     
     // Bulk ML call
+    const mlUrl = getMLBridgeUrl()
+    const mlEnabled = isMLEnabled()
     let mlResults: Record<number, MLEnhancement> = {}
-    if (ML_ENABLED && validRows.length > 0) {
+    if (mlEnabled && validRows.length > 0) {
       try {
-        console.log(`[ML] Calling ML bridge at ${ML_API_URL}/ml/bulk for ${validRows.length} rows...`)
-        const res = await fetch(`${ML_API_URL}/ml/bulk`, {
+        console.log(`[ML] Calling ML bridge at ${mlUrl}/ml/bulk for ${validRows.length} rows...`)
+        console.log(`[ML] Runtime env: ML_BRIDGE_URL=${process.env.ML_BRIDGE_URL}, NEXT_PUBLIC_ML_BRIDGE_URL=${process.env.NEXT_PUBLIC_ML_BRIDGE_URL}`)
+        const res = await fetch(`${mlUrl}/ml/bulk`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validRows),

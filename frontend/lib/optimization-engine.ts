@@ -23,32 +23,62 @@ export interface MLEnhancement {
   packaging_tip: string
 }
 
-const ML_API_URL = process.env.ML_BRIDGE_URL || process.env.NEXT_PUBLIC_ML_BRIDGE_URL || 'http://localhost:5001'
-const ML_ENABLED = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
+// ── Runtime env reads (NOT build-time inlined) ─────────────────────
+// On Vercel, process.env.NEXT_PUBLIC_* is inlined at build time.
+// By reading process.env inside functions, we get the current value at runtime.
+function getMLBridgeUrl(): string {
+  return process.env.ML_BRIDGE_URL
+    || process.env.NEXT_PUBLIC_ML_BRIDGE_URL
+    || 'http://localhost:5001'
+}
 
-export async function checkMLBridge(): Promise<boolean> {
-  if (!ML_ENABLED) return false
-  try {
-    const res = await fetch(`${ML_API_URL}/ml/health`, { signal: AbortSignal.timeout(10000) })
-    if (res.ok) {
-      console.log('ML bridge connected ✅')
-      return true
+function isMLEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, retries = 2, delayMs = 3000): Promise<Response> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      if (attempt < retries) {
+        console.warn(`[ML] Retry ${attempt + 1}/${retries} for ${url}: ${lastError.message}`)
+        await new Promise(r => setTimeout(r, delayMs))
+      }
     }
-  } catch (err) {
-    // offline
   }
-  console.log('ML bridge offline — rule-based mode')
-  return false
+  throw lastError!
+}
+
+export async function checkMLBridge(): Promise<{ connected: boolean; url: string; status: string }> {
+  const url = getMLBridgeUrl()
+  const enabled = isMLEnabled()
+  if (!enabled) return { connected: false, url, status: 'disabled' }
+  try {
+    const res = await fetchWithRetry(`${url}/ml/health`, { signal: AbortSignal.timeout(10000) }, 1, 2000)
+    if (res.ok) {
+      const data = await res.json()
+      console.log(`[ML] Bridge connected at ${url} — status: ${data.status}, models: ${data.models_loaded}`)
+      return { connected: true, url, status: data.status || 'healthy' }
+    }
+    return { connected: false, url, status: `HTTP ${res.status}` }
+  } catch (err) {
+    console.warn(`[ML] Bridge offline at ${url}:`, err instanceof Error ? err.message : err)
+    return { connected: false, url, status: 'unreachable' }
+  }
 }
 
 export async function mlEnhance(product: ParsedProduct): Promise<MLEnhancement | null> {
-  if (!ML_ENABLED) return null
+  if (!isMLEnabled()) return null
+  const url = getMLBridgeUrl()
   try {
-    const res = await fetch(`${ML_API_URL}/ml/single`, {
+    const res = await fetch(`${url}/ml/single`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
-      signal: AbortSignal.timeout(2000)
+      signal: AbortSignal.timeout(5000)
     })
     if (!res.ok) return null
     return await res.json()
@@ -396,16 +426,19 @@ export async function bulkOptimize(
     }
     
     // Bulk ML call
+    const mlUrl = getMLBridgeUrl()
+    const mlEnabled = isMLEnabled()
     let mlResults: Record<number, MLEnhancement> = {}
-    if (ML_ENABLED && validRows.length > 0) {
+    if (mlEnabled && validRows.length > 0) {
       try {
-        console.log(`[ML] Calling ML bridge at ${ML_API_URL}/ml/bulk for ${validRows.length} rows...`)
-        const res = await fetch(`${ML_API_URL}/ml/bulk`, {
+        console.log(`[ML] Calling ML bridge at ${mlUrl}/ml/bulk for ${validRows.length} rows...`)
+        console.log(`[ML] Runtime env: ML_BRIDGE_URL=${process.env.ML_BRIDGE_URL}, NEXT_PUBLIC_ML_BRIDGE_URL=${process.env.NEXT_PUBLIC_ML_BRIDGE_URL}`)
+        const res = await fetchWithRetry(`${mlUrl}/ml/bulk`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validRows),
-          signal: AbortSignal.timeout(15000)
-        })
+          signal: AbortSignal.timeout(30000)
+        }, 2, 5000)
         if (res.ok) {
           const data: MLEnhancement[] = await res.json()
           data.forEach((item, idx) => {
@@ -419,9 +452,9 @@ export async function bulkOptimize(
           console.warn(`[ML] ML bridge returned status ${res.status} — falling back to rule-based optimization`)
         }
       } catch (err) {
-        console.warn(`[ML] ML bridge unreachable at ${ML_API_URL} — falling back to rule-based optimization. Error:`, err instanceof Error ? err.message : err)
+        console.warn(`[ML] ML bridge unreachable at ${mlUrl} — falling back to rule-based optimization. Error:`, err instanceof Error ? err.message : err)
       }
-    } else if (!ML_ENABLED) {
+    } else if (!mlEnabled) {
       console.log('[ML] ML bridge disabled via NEXT_PUBLIC_ML_BRIDGE_ENABLED=false — using rule-based optimization')
     }
 

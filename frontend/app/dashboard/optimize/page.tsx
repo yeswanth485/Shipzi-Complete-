@@ -637,8 +637,10 @@ export default function OptimizePage() {
                 </div>
               )}
               {!bulkResult.summary?.ml_used && (
-                <div className="flex items-center gap-2 p-3 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--accent-warning)' }}>
-                  <span>ML model was not available — used rule-based optimization only</span>
+                <div className="flex flex-col gap-2 p-3 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: 'var(--accent-warning)' }}>
+                  <span className="font-semibold">ML model was not available — used rule-based optimization only</span>
+                  <span className="opacity-70">The ML bridge server was unreachable. Optimization still works with rule-based engine. Check Vercel env var <code>NEXT_PUBLIC_ML_BRIDGE_URL</code> is set and the ML server is running.</span>
+                  <a href="/api/ml/status" target="_blank" rel="noopener noreferrer" className="underline opacity-70 hover:opacity-100">Check ML bridge status →</a>
                 </div>
               )}
 
