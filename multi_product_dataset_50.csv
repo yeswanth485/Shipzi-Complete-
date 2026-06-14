@@ -1,0 +1,51 @@
+order_id,product_names,product_lengths,product_widths,product_heights,product_fragilities,used_box_length,used_box_width,used_box_height,used_box_price,shipping_zone
+ORD-001,Phone Case|Screen Protector|Charger Cable,18|25|15,10|3|8,10|18|6,5|2|4,30,25,20,3.50,Zone 1
+ORD-002,Keyboard|Mouse|Mousepad,45|12|35,15|6|25,4|3|2,2|3|1,55,30,12,4.20,Zone 2
+ORD-003,Mug|Coaster Set|Spoon,12|20|20,10|15|5,10|3|3,3|1|2,25,25,15,2.80,Zone 3
+ORD-004,Baby Onesie|Socks Pack|Rattle,22|15|12,15|10|5,10|5|12,1|2|4,30,25,20,3.10,Zone 1
+ORD-005,Notebook|Pen Set|Sticky Notes,28|22|15,20|8|5,8|3|3,1|3|1,35,25,20,3.80,Zone 2
+ORD-006,T-Shirt|Belt|Wallet,30|25|8,25|5|10,10|2|3,4|5|2,40,30,15,3.60,Zone 3
+ORD-007,Headphones|Earbuds|Audio Cable,20|18|25,18|8|15,15|5|2,3|4|1,30,25,20,4.00,Zone 1
+ORD-008,Candle|Diffuser|Incense,15|12|20,12|12|5,20|5|8,5|3|2,25,20,30,3.20,Zone 4
+ORD-009,Lipstick|Mascara|Compact,10|8|15,3|2|12,5|5|3,2|3|2,20,15,20,2.50,Zone 2
+ORD-010,Water Bottle|Lunch Bag|Utensils,25|30|15,8|20|8,8|8|3,5|3|2,35,35,20,4.50,Zone 1
+ORD-011,Dog Leash|Treats Bag|Waste Bags,20|25|15,3|15|5,3|10|8,6|3|1,25,20,15,3.00,Zone 3
+ORD-012,Plant Pot|Saucer|Soil Pack,18|22|25,18|15|10,15|3|10,2|1|3,30,25,30,3.40,Zone 2
+ORD-013,Picture Frame|Wall Hook|Mounting Kit,30|25|5,25|20|3,3|3|15,1|1|5,35,30,10,3.70,Zone 1
+ORD-014,Yoga Mat|Resistance Band|Mat Bag,68|15|15,60|10|5,15|3|10,4|2|1,75,20,20,5.00,Zone 4
+ORD-015,Glass Jar|Wooden Spoon|Recipe Book,12|15|25,10|4|20,15|4|18,4|2|3,20,20,30,3.30,Zone 2
+ORD-016,Coffee Mug|Tea Set|Sugar Bowl,12|18|20,10|8|15,10|8|12,3|3|3,25,25,25,3.90,Zone 3
+ORD-017,Car Phone Mount|USB Cable|Car Charger,15|12|10,8|6|4,12|3|3,4|1|1,20,15,15,2.90,Zone 1
+ORD-018,Board Game|Dice Set|Card Sleeves,30|25|8,25|20|5,5|5|2,2|3|2,35,30,12,4.10,Zone 2
+ORD-019,Spice Rack|Spice Jars Set,40|15|25,35|12|20,15|3|15,4|3|5,45,20,30,5.20,Zone 4
+ORD-020,Bath Towel|Hand Towel|Washcloth Set,35|25|15,30|20|5,5|5|3,2|2|2,40,30,20,3.60,Zone 1
+ORD-021,Pet Bed|Pet Toy|Pet Bowl,40|35|15,35|30|10,15|8|12,5|2|4,45,40,20,5.50,Zone 3
+ORD-022,Wireless Charger|Phone Stand|Cable Organizer,18|12|15,15|10|5,10|8|5,3|2|2,22,18,18,3.10,Zone 2
+ORD-023,Garden Gloves|Pruning Shears|Plant Labels,25|15|10,20|8|3,8|3|2,4|5|1,28,18,12,2.80,Zone 4
+ORD-024,Puzzle|Puzzle Mat|Puzzle Glue,38|28|10,35|25|5,5|3|3,3|2|1,42,32,12,4.30,Zone 1
+ORD-025,Cookbook|Kitchen Timer|Oven Mitt,28|22|25,25|20|5,5|3|15,3|2|4,32,25,30,4.00,Zone 2
+ORD-026,Backpack|Water Bottle Holder|Luggage Tag,45|35|20,40|30|15,10|8|3,6|3|2,50,40,25,5.80,Zone 3
+ORD-027,Desk Lamp|Pen Holder|Business Card Holder,20|15|30,18|12|15,10|8|8,4|3|3,25,20,35,3.50,Zone 1
+ORD-028,Running Socks|Insoles|Shoe Bag,22|18|12,18|10|8,8|5|2,3|2|1,25,20,15,2.70,Zone 2
+ORD-029,Cookie Mix|Cookie Cutter|Parchment Paper,25|20|15,22|18|10,10|8|5,2|3|2,28,22,18,3.20,Zone 4
+ORD-030,Dumbbells|Exercise Ball|Jump Rope,25|30|25,20|25|20,15|5|15,8|5|3,35,35,30,6.00,Zone 3
+ORD-031,Scarf|Beanie|Gloves,30|25|10,28|22|5,10|8|5,2|3|2,35,28,12,3.40,Zone 1
+ORD-032,Baby Bottle|Pacifier Set|Bib,20|15|15,18|12|8,10|8|5,3|2|3,25,20,20,3.00,Zone 2
+ORD-033,LED Strip|Remote Control|Adhesive Clips,50|8|10,45|6|5,5|5|3,2|1|2,55,12,15,3.80,Zone 4
+ORD-034,Camera Lens|Lens Cap|Lens Cloth,15|12|18,12|10|15,8|8|5,5|3|2,18,15,22,4.20,Zone 3
+ORD-035,Candle Holder|Tea Lights|Matches,12|12|15,10|10|8,10|5|3,3|3|1,15,15,18,2.60,Zone 1
+ORD-036,Toothbrush|Toothpaste|Dental Floss,20|8|15,18|6|5,5|5|3,2|2|1,22,12,18,2.40,Zone 2
+ORD-037,Foam Roller|Massage Ball|Stretching Strap,45|15|15,40|12|12,10|8|3,5|3|1,50,18,18,4.80,Zone 4
+ORD-038,Wine Opener|Wine Stopper|Pour Spout,18|12|10,15|10|5,8|5|8,3|3|2,20,15,15,3.10,Zone 3
+ORD-039,Laptop Stand|Cable Management|USB Hub,35|30|10,30|25|5,8|5|3,5|3|2,40,32,12,4.50,Zone 1
+ORD-040,Face Wash|Moisturizer|Sunscreen,15|12|18,12|10|12,10|8|10,3|3|3,18,15,22,3.30,Zone 2
+ORD-041,Kitchen Scale|Measuring Cups|Recipe Cards,25|20|12,22|18|8,15|5|3,4|3|2,28,22,15,3.60,Zone 3
+ORD-042,Bluetooth Speaker|Aux Cable|Carrying Case,20|15|18,18|12|12,8|5|5,5|3|2,22,18,22,3.80,Zone 1
+ORD-043,Bed Sheet Set|Pillow Cases|Fabric Softener,35|25|15,30|22|10,10|5|8,3|2|3,38,28,18,4.20,Zone 4
+ORD-044,Sewing Kit|Buttons Pack|Thread Set,18|12|10,15|10|8,10|5|3,2|3|2,20,15,15,2.50,Zone 2
+ORD-045,Trail Mix|Dried Fruit|Energy Bars,25|20|12,22|18|8,10|8|5,3|3|3,28,22,15,3.40,Zone 3
+ORD-046,Hair Dryer|Hair Clips|Travel Pouch,25|20|15,22|18|10,8|5|5,4|3|2,28,22,18,3.70,Zone 1
+ORD-047,Book|Bookmark|Reading Light,25|20|5,22|18|3,15|2|3,3|1|2,28,22,8,3.20,Zone 2
+ORD-048,Gym Towel|Protein Bar|Shaker Bottle,30|25|15,28|20|8,10|8|12,3|3|4,35,28,18,4.00,Zone 4
+ORD-049,Keychain|USB Drive|Small Notebook,12|8|10,10|6|5,8|5|3,2|2|1,15,12,12,2.20,Zone 1
+ORD-050,Monitor Stand|Webcam Cover|Desk Mat,50|30|10,45|25|5,8|5|3,5|2|2,55,35,15,5.00,Zone 3
