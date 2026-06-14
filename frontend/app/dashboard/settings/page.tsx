@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
 import { useSubscription } from '@/context/SubscriptionContext'
+import { useSearchParams } from 'next/navigation'
 import { Check, Eye, EyeOff, Copy, Crown } from 'lucide-react'
 
 const TABS = ['Profile', 'Company', 'Notifications', 'Billing']
@@ -40,7 +41,9 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function SettingsPage() {
   const { userData, firebaseUser, refreshUser } = useUser()
   const { subscription, isPro, isFree, optimizationsRemaining, refreshSubscription } = useSubscription()
-  const [activeTab, setActiveTab] = useState('Profile')
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab') === 'Billing' ? 'Billing' : 'Profile'
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -392,8 +395,8 @@ export default function SettingsPage() {
                   {/* Upgrade Plans */}
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { plan: 'Pro', price: '$149/mo', features: ['Unlimited optimizations', '10,000 rows/upload', 'Full AI optimization', 'Advanced analytics', 'ESG reports', 'Priority support'], highlighted: isPro },
-                      { plan: 'Enterprise', price: 'Custom', features: ['Everything in Pro', 'SSO & SAML', 'API access', 'Dedicated support', 'Custom integrations', 'SLA guarantee'], highlighted: false },
+                      { plan: 'Pro', price: '₹2,499/mo', features: ['5,000 optimizations/month', '10 users', 'Bulk CSV up to 10,000 rows', 'Advanced analytics dashboard', 'AI insights + reasons', 'Priority email support'], highlighted: isPro },
+                      { plan: 'Max', price: '₹9,999/mo', features: ['Unlimited optimizations', 'Unlimited users', 'Bulk CSV: no row limit', 'SSO (SAML/OIDC)', 'REST API access', 'Dedicated account manager'], highlighted: false },
                     ].map(p => (
                       <div key={p.plan} className="glass-card p-5 relative overflow-hidden"
                         style={p.highlighted ? { border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
@@ -412,7 +415,7 @@ export default function SettingsPage() {
                           className={`${p.highlighted ? 'btn-ghost' : 'btn-ghost'} w-full text-sm`}
                           style={{ padding: '8px' }}
                           disabled={p.highlighted}>
-                          {p.highlighted ? 'Current Plan' : p.plan === 'Enterprise' ? 'Contact Sales' : 'Upgrade'}
+                          {p.highlighted ? 'Current Plan' : p.plan === 'Max' ? 'Contact Sales' : 'Upgrade'}
                         </button>
                       </div>
                     ))}

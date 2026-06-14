@@ -120,7 +120,7 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
           style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(37,99,235,0.3)' }}>
           <p className="text-xs font-bold text-white mb-1">⚡ Upgrade to Pro</p>
           <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Unlimited optimizations & rows</p>
-          <Link href="/dashboard/settings" className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-block"
+          <Link href="/dashboard/settings?tab=Billing" className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-block"
             style={{ background: 'var(--accent-primary)', color: 'white' }}>
             Upgrade Now
           </Link>

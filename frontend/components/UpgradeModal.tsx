@@ -71,8 +71,8 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
 
               <div className="glass-card p-4 text-center mb-4"
                 style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.2)' }}>
-                <div className="font-syne font-bold text-2xl text-white mb-1">$149<span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>/month</span></div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Growth Plan — Cancel anytime</p>
+                <div className="font-syne font-bold text-2xl text-white mb-1">₹2,499<span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>/month</span></div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Pro Plan — Cancel anytime</p>
               </div>
 
               <div className="flex gap-3">
@@ -81,7 +81,7 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
                   style={{ padding: '10px', fontSize: 13 }}>
                   Maybe Later
                 </button>
-                <Link href="/dashboard/settings"
+                <Link href="/dashboard/settings?tab=Billing"
                   onClick={onClose}
                   className="btn-primary flex-1 justify-center"
                   style={{ padding: '10px', fontSize: 13, textDecoration: 'none', textAlign: 'center' }}>
