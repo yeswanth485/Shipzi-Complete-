@@ -27,7 +27,7 @@ export interface MLEnhancement {
 function getMLBridgeUrl(): string {
   return process.env.ML_BRIDGE_URL
     || process.env.NEXT_PUBLIC_ML_BRIDGE_URL
-    || 'http://localhost:5001'
+    || 'https://shipzi-complete-ml-engine.onrender.com'
 }
 
 function isMLEnabled(): boolean {

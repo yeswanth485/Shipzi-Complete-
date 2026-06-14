@@ -1,11 +1,28 @@
 import os
 import joblib
+import json
+import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 import traceback
 
+class NumpyEncoder(json.JSONEncoder):
+    """Handle numpy types that aren't JSON serializable."""
+    def default(self, obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
 app = Flask(__name__)
+try:
+    app.json_encoder = NumpyEncoder
+except AttributeError:
+    app.json.ensure_ascii = False
 CORS(app)
 
 # Required models
@@ -120,7 +137,7 @@ def _predict_single(product):
                 recommended_box = str(pred)
                 
             proba = clf.predict_proba(features)[0]
-            confidence = round(max(proba) * 100, 1)
+            confidence = round(float(max(proba)) * 100, 1)
             model_used = True
                 
     except Exception as e:
@@ -134,7 +151,7 @@ def _predict_single(product):
         try:
             current_price = float(current_price)
             saving = max(round(current_price - opt_price, 2), 0) if model_used else 0
-        except ValueError:
+        except (ValueError, TypeError):
             saving = 0
     else:
         saving = 0
@@ -142,15 +159,15 @@ def _predict_single(product):
     tip = "HIGH FRAGILITY: bubble wrap + foam corners." if frag >= 7 else "Standard packaging."
     
     return {
-        "recommended_box_name": recommended_box,
+        "recommended_box_name": str(recommended_box) if recommended_box else None,
         "recommended_box_dims": { "L": 40, "W": 30, "H": 20 },
-        "optimized_box_price": opt_price if model_used else current_price,
-        "ml_confidence_pct": confidence,
-        "savings_usd": saving,
+        "optimized_box_price": float(opt_price) if model_used else float(current_price) if current_price else 0.0,
+        "ml_confidence_pct": float(confidence),
+        "savings_usd": float(saving),
         "is_oversized": False,
         "fit_status": "optimized" if model_used else "rule_based",
-        "packaging_tip": tip,
-        "model_used": model_used
+        "packaging_tip": str(tip),
+        "model_used": bool(model_used)
     }
 
 @app.route('/', methods=['GET'])

@@ -6,7 +6,7 @@ export async function GET() {
   // Read env vars at RUNTIME (not build time)
   const mlUrl = process.env.ML_BRIDGE_URL
     || process.env.NEXT_PUBLIC_ML_BRIDGE_URL
-    || 'http://localhost:5001'
+    || 'https://shipzi-complete-ml-engine.onrender.com'
   const mlEnabled = process.env.NEXT_PUBLIC_ML_BRIDGE_ENABLED !== 'false'
 
   const debug = {
