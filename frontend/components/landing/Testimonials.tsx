@@ -70,20 +70,11 @@ function TestimonialCard({ t, index }: { t: typeof testimonials[0]; index: numbe
           border: t.featured ? undefined : undefined,
         }}
       >
-        {/* Featured Gradient Border */}
         {t.featured && (
-          <>
-            <div className="absolute -top-0.5 left-0 right-0 h-[2px]"
-              style={{
-                background: 'linear-gradient(90deg, #2563EB, #06B6D4, #10B981)',
-                animation: 'spin 8s linear infinite',
-              }}
-            />
-            <div className="inline-block self-start px-3 py-1 rounded-full text-xs font-medium mb-4"
-              style={{ background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#06B6D4' }}>
-              Featured Story
-            </div>
-          </>
+          <div className="inline-block self-start px-3 py-1 rounded-full text-xs font-medium mb-4"
+            style={{ background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#06B6D4' }}>
+            Featured Story
+          </div>
         )}
 
         {/* Stars */}

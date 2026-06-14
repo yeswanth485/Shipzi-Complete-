@@ -160,20 +160,6 @@ export default function Pricing() {
                 </motion.div>
               )}
 
-              {/* Gradient Border for Featured */}
-              {plan.featured && (
-                <div className="absolute inset-0 rounded-2xl pointer-events-none"
-                  style={{
-                    background: 'conic-gradient(from 0deg, #2563EB, #06B6D4, #10B981, #2563EB)',
-                    padding: 2,
-                    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                    WebkitMaskComposite: 'xor',
-                    maskComposite: 'exclude',
-                    animation: 'spin 8s linear infinite',
-                  }}
-                />
-              )}
-
               <h3 className="font-syne font-bold text-xl mb-1" style={{ color: 'var(--text-primary)' }}>{plan.name}</h3>
               <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>{plan.tagline}</p>
 

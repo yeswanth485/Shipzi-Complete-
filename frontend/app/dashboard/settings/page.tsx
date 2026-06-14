@@ -7,7 +7,7 @@ import { useUser } from '@/context/UserContext'
 import { useSubscription } from '@/context/SubscriptionContext'
 import { Check, Eye, EyeOff, Copy, Crown } from 'lucide-react'
 
-const TABS = ['Profile', 'Company', 'Notifications', 'Billing', 'API Keys']
+const TABS = ['Profile', 'Company', 'Notifications', 'Billing']
 const INDUSTRIES = ['E-Commerce', 'Retail', 'Manufacturing', 'Healthcare', 'Food & Beverage', 'Electronics', 'Fashion', 'Other']
 const PACKAGING_GOALS = ['Reduce Shipping Costs', 'Minimize Void Fill', 'Right-Size All Packages', 'Eliminate Oversized Boxes', 'Standardize Box Inventory', 'Reduce Returns Due to Damage']
 const SUSTAINABILITY_GOALS = ['Reduce Carbon Footprint', 'Use Recyclable Materials', 'Achieve Carbon Neutral Shipping', 'Minimize Packaging Waste', 'ESG Compliance Reporting']
@@ -58,12 +58,7 @@ export default function SettingsPage() {
   // Notifications state
   const [notifs, setNotifs] = useState<Record<string, boolean>>({})
 
-  // API key state
-  const [apiKey, setApiKey] = useState('sk-shipzi-xxxx-xxxx-A1B2')
-  // BUG-010 FIX: Separate state for password visibility vs API key visibility
   const [showPwd, setShowPwd] = useState(false)
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [keyCopied, setKeyCopied] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!userData) return
@@ -458,45 +453,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* API KEYS */}
-              {activeTab === 'API Keys' && (
-                <div className="glass-card p-6 space-y-6">
-                  <h2 className="font-syne font-bold text-white">API Keys</h2>
-                  <div className="p-4 rounded-xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                    <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Your API Key</p>
-                    <div className="flex items-center gap-3">
-                      <code className="flex-1 font-mono text-sm" style={{ color: 'var(--accent-secondary)' }}>
-                        {showApiKey ? apiKey : 'sk-shipzi-••••-••••-' + apiKey.slice(-4)}
-                      </code>
-                      <button onClick={() => setShowApiKey(!showApiKey)} className="p-2 rounded" style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                      <button onClick={() => { navigator.clipboard.writeText(apiKey); setKeyCopied(true); setTimeout(() => setKeyCopied(false), 2000) }}
-                        className="p-2 rounded" style={{ color: keyCopied ? 'var(--accent-success)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                        {keyCopied ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                    </div>
-                    <button onClick={() => { setApiKey(`sk-shipzi-${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`); setToast('API key regenerated ✓') }}
-                      className="btn-ghost mt-3" style={{ fontSize: 12, padding: '6px 12px' }}>
-                      🔄 Regenerate Key
-                    </button>
-                  </div>
 
-                  <div>
-                    <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>Example cURL request:</p>
-                    <pre className="p-4 rounded-xl text-xs overflow-x-auto" style={{ background: 'var(--bg-void)', border: '1px solid var(--border-subtle)', color: 'var(--accent-secondary)', fontFamily: 'monospace' }}>
-{`curl -X POST https://api.shipzi.com/v1/optimize \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"product_name": "Widget",
-       "length_cm": 10,
-       "width_cm": 8,
-       "height_cm": 6,
-       "weight_kg": 0.5}'`}
-                    </pre>
-                  </div>
-                </div>
-              )}
 
             </motion.div>
           </AnimatePresence>

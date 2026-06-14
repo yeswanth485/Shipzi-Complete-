@@ -254,7 +254,42 @@ export default function SustainabilityPage() {
           <h3 className="font-syne font-semibold text-white mb-1">ESG Sustainability Report</h3>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Download a comprehensive sustainability report for stakeholders and ESG compliance.</p>
         </div>
-        <button onClick={() => window.print()} className="btn-primary flex-shrink-0" style={{ padding: '10px 20px' }}>
+        <button onClick={() => {
+          const reportContent = [
+            'ESG SUSTAINABILITY REPORT',
+            '========================',
+            '',
+            `Report Generated: ${new Date().toLocaleDateString()}`,
+            '',
+            'SUMMARY',
+            '-------',
+            `Average Eco Score: ${avgScore} / 100`,
+            `Total CO₂ Reduced: ${totalCarbon} kg`,
+            `Total Optimizations: ${totalOrders}`,
+            `Eco-Friendly Boxes Used: ${ecoBoxes}`,
+            '',
+            'MILESTONES',
+            '----------',
+            ...MILESTONES.map(m => `${m.done ? '✓' : '○'} ${m.label}`),
+            '',
+            'MATERIAL DISTRIBUTION',
+            '---------------------',
+            ...materialCounts.map(m => `${m.name}: ${m.value} orders`),
+            '',
+            'TREND DATA',
+            '----------',
+            ...trendData.map(d => `${d.date}: Score ${d.score}, Carbon ${d.carbon}kg`),
+          ].join('\n')
+          const blob = new Blob([reportContent], { type: 'text/plain' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `sustainability-report-${new Date().toISOString().slice(0,10)}.txt`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }} className="btn-primary flex-shrink-0" style={{ padding: '10px 20px' }}>
           📄 Download Report
         </button>
       </motion.div>
