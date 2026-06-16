@@ -1,8 +1,7 @@
 // Verify JWT tokens from Supabase Auth.
 
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { CONFIG } from '../config/env';
+import { supabase } from '../config/supabase';
 import { createChildLogger } from '../config/logger';
 
 const logger = createChildLogger('auth-middleware');
@@ -22,7 +21,7 @@ declare global {
   }
 }
 
-export function authenticateUser(req: Request, res: Response, next: NextFunction): void {
+export async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -33,17 +32,23 @@ export function authenticateUser(req: Request, res: Response, next: NextFunction
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, CONFIG.JWT_SECRET) as { sub: string; email?: string; role?: string };
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      logger.warn('Supabase token verification failed', { error: error?.message });
+      res.status(401).json({ success: false, error: 'Invalid or expired token' });
+      return;
+    }
 
     req.user = {
-      id: decoded.sub,
-      email: decoded.email || '',
-      role: decoded.role,
+      id: user.id,
+      email: user.email || '',
+      role: user.role,
     };
 
     next();
   } catch (error) {
-    logger.warn('JWT verification failed', { error: (error as Error).message });
+    logger.warn('Auth verification failed', { error: (error as Error).message });
     res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 }
