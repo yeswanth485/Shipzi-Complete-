@@ -77,18 +77,6 @@ export interface RazorpayCheckoutOptions {
     contact?: string;
   };
   notes: Record<string, string>;
-  config?: {
-    display?: {
-      blocks?: Record<string, {
-        name: string;
-        instruments: Array<{ method: string }>;
-      }>;
-      sequence?: string[];
-      preferences?: {
-        show_default_blocks?: boolean;
-      };
-    };
-  };
   modal?: {
     ondismiss?: () => void;
     confirm_close?: boolean;

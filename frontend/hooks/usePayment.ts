@@ -83,25 +83,6 @@ export function usePayment(userInfo?: { email?: string; contact?: string }) {
             email: userInfo?.email || '',
           },
           notes: { plan_id: planId },
-          config: {
-            display: {
-              blocks: {
-                utib: {
-                  name: 'Pay using UPI / Cards / Wallets',
-                  instruments: [
-                    { method: 'upi' },
-                    { method: 'card' },
-                    { method: 'wallet' },
-                    { method: 'netbanking' },
-                  ],
-                },
-              },
-              sequence: ['block.utib'],
-              preferences: {
-                show_default_blocks: true,
-              },
-            },
-          },
           modal: {
             ondismiss: () => {
               setPaymentState((prev) => ({
