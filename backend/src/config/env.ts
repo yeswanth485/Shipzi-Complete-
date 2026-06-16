@@ -1,0 +1,61 @@
+// Loads and validates all environment variables at startup. Throw if any required var is missing.
+
+const isTest = process.env.NODE_ENV === 'test';
+
+const requiredEnvVars = [
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY',
+  'RAZORPAY_KEY_ID',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+  'JWT_SECRET',
+  'FRONTEND_URL',
+] as const;
+
+function validateEnv(): void {
+  if (isTest) return; // Skip validation during tests
+  const missing: string[] = [];
+  for (const key of requiredEnvVars) {
+    if (!process.env[key]) {
+      missing.push(key);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
+
+function parsePort(value: string | undefined): number {
+  const port = parseInt(value || '5000', 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid PORT value: ${value}`);
+  }
+  return port;
+}
+
+validateEnv();
+
+export const CONFIG = {
+  NODE_ENV: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
+  PORT: parsePort(process.env.PORT),
+
+  SUPABASE_URL: process.env.SUPABASE_URL!,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
+
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID!,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET!,
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET!,
+
+  JWT_SECRET: process.env.JWT_SECRET!,
+  FRONTEND_URL: process.env.FRONTEND_URL!,
+  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
+    : [process.env.FRONTEND_URL!],
+
+  RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
+  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+} as const;
+
+export type Config = typeof CONFIG;
