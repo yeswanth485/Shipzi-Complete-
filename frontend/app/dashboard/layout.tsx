@@ -151,7 +151,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { firebaseUser, userData, isLoading } = useUser()
-  const { isPro, showUpgradeModal, setShowUpgradeModal, upgradeReason } = useSubscription()
+  const { isPro, showUpgradeModal, setShowUpgradeModal, upgradeReason, setUpgradeReason } = useSubscription()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [avatarDropdown, setAvatarDropdown] = useState(false)
 
