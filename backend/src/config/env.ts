@@ -11,6 +11,9 @@ const requiredEnvVars = [
   'RAZORPAY_WEBHOOK_SECRET',
   'JWT_SECRET',
   'FRONTEND_URL',
+  'FIREBASE_PROJECT_ID',
+  'FIREBASE_CLIENT_EMAIL',
+  'FIREBASE_PRIVATE_KEY',
 ] as const;
 
 function validateEnv(): void {
@@ -50,6 +53,11 @@ export const CONFIG = {
 
   JWT_SECRET: process.env.JWT_SECRET!,
   FRONTEND_URL: process.env.FRONTEND_URL!,
+
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID!,
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL!,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY!,
+
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
     : [

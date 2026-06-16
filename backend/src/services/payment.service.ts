@@ -8,6 +8,7 @@ import { AppError } from '../middlewares/error.middleware';
 import { AUDIT_ACTIONS, CURRENCY, MIN_PAYMENT_AMOUNT, MAX_PAYMENT_AMOUNT } from '../constants/payment.constants';
 import { CreateOrderResponse, VerifyPaymentRequest, VerifyPaymentResponse, PaymentRecord, PaginatedResponse } from '../types/payment.types';
 import { supabase } from '../config/supabase';
+import { CONFIG } from '../config/env';
 
 const logger = createChildLogger('payment-service');
 
@@ -51,7 +52,7 @@ export const paymentService = {
         order_id: existing.razorpay_order_id,
         amount: existing.amount,
         currency: existing.currency,
-        key_id: process.env.RAZORPAY_KEY_ID || '',
+        key_id: CONFIG.RAZORPAY_KEY_ID,
       };
     }
 
@@ -103,7 +104,7 @@ export const paymentService = {
       order_id: order.id,
       amount,
       currency: CURRENCY,
-      key_id: process.env.RAZORPAY_KEY_ID || '',
+      key_id: CONFIG.RAZORPAY_KEY_ID,
     };
   },
 

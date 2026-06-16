@@ -1,7 +1,7 @@
-// Verify JWT tokens from Supabase Auth.
+// Verify Firebase ID tokens.
 
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../config/supabase';
+import { firebaseAdmin } from '../config/firebase';
 import { createChildLogger } from '../config/logger';
 
 const logger = createChildLogger('auth-middleware');
@@ -32,23 +32,15 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
   const token = authHeader.split(' ')[1];
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      logger.warn('Supabase token verification failed', { error: error?.message });
-      res.status(401).json({ success: false, error: 'Invalid or expired token' });
-      return;
-    }
-
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
     req.user = {
-      id: user.id,
-      email: user.email || '',
-      role: user.role,
+      id: decodedToken.uid,
+      email: decodedToken.email || '',
+      role: (decodedToken as any).role || 'member',
     };
-
     next();
   } catch (error) {
-    logger.warn('Auth verification failed', { error: (error as Error).message });
+    logger.warn('Firebase token verification failed', { error: (error as Error).message });
     res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 }

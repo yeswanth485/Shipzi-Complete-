@@ -12,15 +12,14 @@ import {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5000';
 
+import { auth } from '../lib/firebase';
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token || null;
+    const user = auth.currentUser;
+    if (!user) return null;
+    return await user.getIdToken();
   } catch {
     return null;
   }
