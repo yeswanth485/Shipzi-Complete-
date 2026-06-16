@@ -18,11 +18,25 @@ app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || CONFIG.ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
+      if (!origin) return callback(null, true);
+
+      // Exact match from allowed list
+      if (CONFIG.ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
       }
+
+      // Allow any Vercel preview deployment (*.vercel.app)
+      if (/^https:\/\/.+\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow localhost for development
+      if (/^http:\/\/localhost:\d+$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      console.error(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
   })
