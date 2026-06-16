@@ -1,30 +1,19 @@
 -- ============================================================================
 -- SHIPZI PAYMENT SYSTEM — Complete Database Foundation
--- Tables: users, payments, payment_events, refunds, subscriptions, credits, audit_logs
--- Safe to re-run: uses IF NOT EXISTS and ADD COLUMN IF NOT EXISTS
+-- Compatible with existing users table (id TEXT — Firebase Auth UID)
+-- Tables: payments, payment_events, refunds, subscriptions, credits, audit_logs
+-- Safe to re-run: uses IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, DROP IF EXISTS
 -- ============================================================================
 
 -- ============================================================================
 -- PHASE 1: CREATE TABLES (skip if already exist)
--- Order matters: users first (others reference it), then payments, then rest
+-- IMPORTANT: users table already exists — do NOT recreate it
+-- All user_id columns are TEXT to match existing users.id type
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20),
-    razorpay_customer_id VARCHAR(100) UNIQUE,
-    is_active BOOLEAN DEFAULT true,
-    deleted_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-);
-
 CREATE TABLE IF NOT EXISTS payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT NOT NULL,
     razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
     razorpay_payment_id VARCHAR(100) UNIQUE,
     razorpay_signature VARCHAR(500),
@@ -49,8 +38,8 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 CREATE TABLE IF NOT EXISTS payment_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    payment_id TEXT,
     event_id VARCHAR(100) UNIQUE NOT NULL,
     event_type VARCHAR(100) NOT NULL,
     payload JSONB NOT NULL,
@@ -64,9 +53,9 @@ CREATE TABLE IF NOT EXISTS payment_events (
 );
 
 CREATE TABLE IF NOT EXISTS refunds (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    payment_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
     razorpay_refund_id VARCHAR(100) UNIQUE,
     amount INTEGER NOT NULL,
     reason VARCHAR(255) NOT NULL,
@@ -84,8 +73,8 @@ CREATE TABLE IF NOT EXISTS refunds (
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT NOT NULL,
     razorpay_subscription_id VARCHAR(100) UNIQUE,
     plan_id VARCHAR(50) NOT NULL,
     status VARCHAR(30) NOT NULL,
@@ -104,10 +93,10 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 CREATE TABLE IF NOT EXISTS credits (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    payment_id UUID,
-    refund_id UUID,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT NOT NULL,
+    payment_id TEXT,
+    refund_id TEXT,
     type VARCHAR(30) NOT NULL,
     amount INTEGER NOT NULL,
     balance_after INTEGER NOT NULL,
@@ -119,12 +108,12 @@ CREATE TABLE IF NOT EXISTS credits (
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT,
     actor VARCHAR(100) NOT NULL,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50) NOT NULL,
-    entity_id UUID NOT NULL,
+    entity_id TEXT NOT NULL,
     old_data JSONB,
     new_data JSONB,
     ip_address INET,
@@ -134,11 +123,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 -- ============================================================================
--- PHASE 2: ADD MISSING COLUMNS (for tables created by earlier partial runs)
--- These use ADD COLUMN IF NOT EXISTS — safe if columns already exist
+-- PHASE 2: ADD MISSING COLUMNS (safe re-run for partial prior attempts)
 -- ============================================================================
 
--- Users
+-- Users (add payment-related columns to existing table)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
@@ -148,14 +136,9 @@ DO $$ BEGIN
         ALTER TABLE users ADD CONSTRAINT users_razorpay_customer_id_key UNIQUE (razorpay_customer_id);
     END IF;
 END $$;
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_format') THEN
-        ALTER TABLE users ADD CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
-    END IF;
-END $$;
 
--- Payments
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS user_id UUID;
+-- Payments (safe for partial runs)
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(100);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_signature VARCHAR(500);
@@ -205,7 +188,7 @@ DO $$ BEGIN
 END $$;
 
 -- Payment events
-ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payment_id UUID;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payment_id TEXT;
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_id VARCHAR(100);
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_type VARCHAR(100);
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}';
@@ -226,8 +209,8 @@ DO $$ BEGIN
 END $$;
 
 -- Refunds
-ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id UUID;
-ALTER TABLE refunds ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id TEXT;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS razorpay_refund_id VARCHAR(100);
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS reason VARCHAR(255) NOT NULL DEFAULT '';
@@ -260,7 +243,7 @@ DO $$ BEGIN
 END $$;
 
 -- Subscriptions
-ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(100);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan_id VARCHAR(50) NOT NULL DEFAULT '';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'created';
@@ -286,9 +269,9 @@ DO $$ BEGIN
 END $$;
 
 -- Credits
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS user_id UUID;
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS payment_id UUID;
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS refund_id UUID;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS payment_id TEXT;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS refund_id TEXT;
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS type VARCHAR(30) NOT NULL DEFAULT 'purchase';
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS balance_after INTEGER NOT NULL DEFAULT 0;
@@ -302,11 +285,11 @@ DO $$ BEGIN
 END $$;
 
 -- Audit logs
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor VARCHAR(100) NOT NULL DEFAULT 'system';
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT '';
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_type VARCHAR(50) NOT NULL DEFAULT '';
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_id UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_id TEXT NOT NULL DEFAULT gen_random_uuid()::text;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS old_data JSONB;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS new_data JSONB;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address INET;
@@ -319,7 +302,6 @@ ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_razorpay_customer_id ON users(razorpay_customer_id);
-CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_razorpay_order_id ON payments(razorpay_order_id);
@@ -368,9 +350,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS set_updated_at_users ON users;
-CREATE TRIGGER set_updated_at_users BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 DROP TRIGGER IF EXISTS set_updated_at_payments ON payments;
 CREATE TRIGGER set_updated_at_payments BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -402,7 +381,7 @@ CREATE TRIGGER audit_logs_no_delete BEFORE DELETE ON audit_logs FOR EACH ROW EXE
 -- PHASE 5: FUNCTIONS
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION get_user_credit_balance(p_user_id UUID)
+CREATE OR REPLACE FUNCTION get_user_credit_balance(p_user_id TEXT)
 RETURNS INTEGER AS $$
 DECLARE
     total_balance INTEGER;
@@ -417,9 +396,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
 -- PHASE 6: ROW LEVEL SECURITY
+-- Backend uses service_role key which bypasses RLS, so policies are permissive.
+-- auth.uid() returns UUID; cast to text for comparison with TEXT user_id columns.
 -- ============================================================================
 
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
@@ -427,58 +407,61 @@ ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE credits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS users_select_own ON users;
-CREATE POLICY users_select_own ON users FOR SELECT USING (auth.uid() = id OR auth.role() = 'service_role');
-
-DROP POLICY IF EXISTS users_update_own ON users;
-CREATE POLICY users_update_own ON users FOR UPDATE USING (auth.uid() = id OR auth.role() = 'service_role');
-
-DROP POLICY IF EXISTS users_insert_service ON users;
-CREATE POLICY users_insert_service ON users FOR INSERT WITH CHECK (auth.role() = 'service_role');
-
 DROP POLICY IF EXISTS payments_select_own ON payments;
-CREATE POLICY payments_select_own ON payments FOR SELECT USING (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY payments_select_own ON payments
+    FOR SELECT USING (auth.uid()::text = user_id OR auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS payments_insert_service ON payments;
-CREATE POLICY payments_insert_service ON payments FOR INSERT WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY payments_insert_service ON payments
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS payments_update_service ON payments;
-CREATE POLICY payments_update_service ON payments FOR UPDATE USING (auth.role() = 'service_role');
+CREATE POLICY payments_update_service ON payments
+    FOR UPDATE USING (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS payment_events_service_only ON payment_events;
-CREATE POLICY payment_events_service_only ON payment_events FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY payment_events_service_only ON payment_events
+    FOR ALL USING (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS refunds_select_own ON refunds;
-CREATE POLICY refunds_select_own ON refunds FOR SELECT USING (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY refunds_select_own ON refunds
+    FOR SELECT USING (auth.uid()::text = user_id OR auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS refunds_insert_service ON refunds;
-CREATE POLICY refunds_insert_service ON refunds FOR INSERT WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY refunds_insert_service ON refunds
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS refunds_update_service ON refunds;
-CREATE POLICY refunds_update_service ON refunds FOR UPDATE USING (auth.role() = 'service_role');
+CREATE POLICY refunds_update_service ON refunds
+    FOR UPDATE USING (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS subscriptions_select_own ON subscriptions;
-CREATE POLICY subscriptions_select_own ON subscriptions FOR SELECT USING (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY subscriptions_select_own ON subscriptions
+    FOR SELECT USING (auth.uid()::text = user_id OR auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS subscriptions_insert_service ON subscriptions;
-CREATE POLICY subscriptions_insert_service ON subscriptions FOR INSERT WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY subscriptions_insert_service ON subscriptions
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS subscriptions_update_service ON subscriptions;
-CREATE POLICY subscriptions_update_service ON subscriptions FOR UPDATE USING (auth.role() = 'service_role');
+CREATE POLICY subscriptions_update_service ON subscriptions
+    FOR UPDATE USING (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS credits_select_own ON credits;
-CREATE POLICY credits_select_own ON credits FOR SELECT USING (auth.uid() = user_id OR auth.role() = 'service_role');
+CREATE POLICY credits_select_own ON credits
+    FOR SELECT USING (auth.uid()::text = user_id OR auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS credits_insert_service ON credits;
-CREATE POLICY credits_insert_service ON credits FOR INSERT WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY credits_insert_service ON credits
+    FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 DROP POLICY IF EXISTS audit_logs_service_only ON audit_logs;
-CREATE POLICY audit_logs_service_only ON audit_logs FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY audit_logs_service_only ON audit_logs
+    FOR ALL USING (auth.role() = 'service_role');
 
 -- ============================================================================
 -- TABLE COMMENTS
 -- ============================================================================
-COMMENT ON TABLE users IS 'Registered users of Shipzi platform with optional Razorpay customer binding';
 COMMENT ON TABLE payments IS 'Every Razorpay payment attempt and result, amount in paise';
 COMMENT ON TABLE payment_events IS 'Razorpay webhook events, event_id uniqueness prevents duplicate processing';
 COMMENT ON TABLE refunds IS 'Refund requests and processing state for Razorpay payments';
