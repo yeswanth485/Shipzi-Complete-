@@ -52,7 +52,11 @@ export const CONFIG = {
   FRONTEND_URL: process.env.FRONTEND_URL!,
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
-    : [process.env.FRONTEND_URL!],
+    : [
+        process.env.FRONTEND_URL!,
+        'https://shipzi.vercel.app',
+        'http://localhost:3000',
+      ].filter(Boolean),
 
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
