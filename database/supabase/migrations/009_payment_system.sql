@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    user_id UUID NOT NULL,
     razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
     razorpay_payment_id VARCHAR(100) UNIQUE,
     razorpay_signature VARCHAR(500),
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE TABLE IF NOT EXISTS payment_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
+    payment_id UUID,
     event_id VARCHAR(100) UNIQUE NOT NULL,
     event_type VARCHAR(100) NOT NULL,
     payload JSONB NOT NULL,
@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS payment_events (
 
 CREATE TABLE IF NOT EXISTS refunds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    payment_id UUID NOT NULL,
+    user_id UUID NOT NULL,
     razorpay_refund_id VARCHAR(100) UNIQUE,
     amount INTEGER NOT NULL,
     reason VARCHAR(255) NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS refunds (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    user_id UUID NOT NULL,
     razorpay_subscription_id VARCHAR(100) UNIQUE,
     plan_id VARCHAR(50) NOT NULL,
     status VARCHAR(30) NOT NULL,
@@ -105,9 +105,9 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE TABLE IF NOT EXISTS credits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
-    refund_id UUID REFERENCES refunds(id) ON DELETE SET NULL,
+    user_id UUID NOT NULL,
+    payment_id UUID,
+    refund_id UUID,
     type VARCHAR(30) NOT NULL,
     amount INTEGER NOT NULL,
     balance_after INTEGER NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS credits (
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_id UUID,
     actor VARCHAR(100) NOT NULL,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50) NOT NULL,
@@ -155,7 +155,7 @@ DO $$ BEGIN
 END $$;
 
 -- Payments
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(100);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_signature VARCHAR(500);
@@ -205,7 +205,7 @@ DO $$ BEGIN
 END $$;
 
 -- Payment events
-ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE SET NULL;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payment_id UUID;
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_id VARCHAR(100);
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_type VARCHAR(100);
 ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}';
@@ -226,8 +226,8 @@ DO $$ BEGIN
 END $$;
 
 -- Refunds
-ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE RESTRICT;
-ALTER TABLE refunds ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id UUID;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS razorpay_refund_id VARCHAR(100);
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE refunds ADD COLUMN IF NOT EXISTS reason VARCHAR(255) NOT NULL DEFAULT '';
@@ -260,7 +260,7 @@ DO $$ BEGIN
 END $$;
 
 -- Subscriptions
-ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(100);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan_id VARCHAR(50) NOT NULL DEFAULT '';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'created';
@@ -286,9 +286,9 @@ DO $$ BEGIN
 END $$;
 
 -- Credits
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE SET NULL;
-ALTER TABLE credits ADD COLUMN IF NOT EXISTS refund_id UUID REFERENCES refunds(id) ON DELETE SET NULL;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS payment_id UUID;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS refund_id UUID;
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS type VARCHAR(30) NOT NULL DEFAULT 'purchase';
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE credits ADD COLUMN IF NOT EXISTS balance_after INTEGER NOT NULL DEFAULT 0;
@@ -302,7 +302,7 @@ DO $$ BEGIN
 END $$;
 
 -- Audit logs
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor VARCHAR(100) NOT NULL DEFAULT 'system';
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT '';
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_type VARCHAR(50) NOT NULL DEFAULT '';
