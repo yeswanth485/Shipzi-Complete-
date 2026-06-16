@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { usePayment } from '../../hooks/usePayment';
+import { useUser } from '../../context/UserContext';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -22,7 +23,11 @@ export function PaymentModal({
   amount,
   onSuccess,
 }: PaymentModalProps) {
-  const { initiatePayment, retryPayment, isLoading, isSuccess, isError, isCancelled, error, paymentId } = usePayment();
+  const { userData, firebaseUser } = useUser();
+  const { initiatePayment, retryPayment, isLoading, isSuccess, isError, isCancelled, error, paymentId } = usePayment({
+    email: userData?.email || firebaseUser?.email || undefined,
+    contact: firebaseUser?.phoneNumber || undefined,
+  });
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Focus trap

@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { usePayment } from '../../hooks/usePayment';
+import { useUser } from '../../context/UserContext';
 
 interface PaymentButtonProps {
   planId: string;
@@ -22,7 +23,11 @@ export function PaymentButton({
   onSuccess,
   onFailure,
 }: PaymentButtonProps) {
-  const { initiatePayment, isLoading, isSuccess, isError, isCancelled, error, paymentId } = usePayment();
+  const { userData, firebaseUser } = useUser();
+  const { initiatePayment, isLoading, isSuccess, isError, isCancelled, error, paymentId } = usePayment({
+    email: userData?.email || firebaseUser?.email || undefined,
+    contact: firebaseUser?.phoneNumber || undefined,
+  });
 
   const handleClick = async () => {
     await initiatePayment(planId);

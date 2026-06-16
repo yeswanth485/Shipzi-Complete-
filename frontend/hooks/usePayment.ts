@@ -7,7 +7,7 @@ import { paymentApi } from '../services/paymentApi';
 import { loadRazorpay } from '../utils/loadRazorpay';
 import { PaymentState, RazorpayCheckoutOptions, RazorpayResponse, VerifyPaymentRequest } from '../types/payment.types';
 
-export function usePayment() {
+export function usePayment(userInfo?: { email?: string; contact?: string }) {
   const [paymentState, setPaymentState] = useState<PaymentState>({
     status: 'idle',
     error: null,
@@ -78,8 +78,30 @@ export function usePayment() {
               });
             }
           },
-          prefill: {},
+          prefill: {
+            contact: userInfo?.contact || '',
+            email: userInfo?.email || '',
+          },
           notes: { plan_id: planId },
+          config: {
+            display: {
+              blocks: {
+                utib: {
+                  name: 'Pay using UPI / Cards / Wallets',
+                  instruments: [
+                    { method: 'upi' },
+                    { method: 'card' },
+                    { method: 'wallet' },
+                    { method: 'netbanking' },
+                  ],
+                },
+              },
+              sequence: ['block.utib'],
+              preferences: {
+                show_default_blocks: true,
+              },
+            },
+          },
           modal: {
             ondismiss: () => {
               setPaymentState((prev) => ({
@@ -116,7 +138,7 @@ export function usePayment() {
         });
       }
     },
-    [isScriptLoaded]
+    [isScriptLoaded, userInfo]
   );
 
   const refundPayment = useCallback(async (paymentId: string, reason: string) => {
