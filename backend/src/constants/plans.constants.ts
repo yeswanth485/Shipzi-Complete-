@@ -12,6 +12,56 @@ export interface PlanConfig {
 }
 
 export const SUBSCRIPTION_PLANS: Record<string, PlanConfig> = {
+  free: {
+    id: 'free',
+    name: 'Free',
+    amount: 0,
+    currency: 'INR',
+    interval: 'monthly',
+    credits_per_cycle: 0,
+    razorpay_plan_id: '',
+    description: '10 optimizations/month',
+  },
+  pro: {
+    id: 'pro',
+    name: 'Pro Monthly',
+    amount: 249900,
+    currency: 'INR',
+    interval: 'monthly',
+    credits_per_cycle: 5000,
+    razorpay_plan_id: '',
+    description: '5,000 optimizations/month',
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise Monthly',
+    amount: 999900,
+    currency: 'INR',
+    interval: 'monthly',
+    credits_per_cycle: -1,
+    razorpay_plan_id: '',
+    description: 'Unlimited optimizations',
+  },
+  pro_annual: {
+    id: 'pro_annual',
+    name: 'Pro Annual',
+    amount: 199900,
+    currency: 'INR',
+    interval: 'annual',
+    credits_per_cycle: 5000,
+    razorpay_plan_id: '',
+    description: '5,000 optimizations/month (2 months free)',
+  },
+  enterprise_annual: {
+    id: 'enterprise_annual',
+    name: 'Enterprise Annual',
+    amount: 799900,
+    currency: 'INR',
+    interval: 'annual',
+    credits_per_cycle: -1,
+    razorpay_plan_id: '',
+    description: 'Unlimited optimizations (2 months free)',
+  },
   basic_monthly: {
     id: 'basic_monthly',
     name: 'Basic Monthly',
@@ -42,8 +92,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanConfig> = {
     razorpay_plan_id: 'plan_basic_annual_rzp',
     description: '1200 AI credits per year (2 months free)',
   },
-  pro_annual: {
-    id: 'pro_annual',
+  pro_annual_legacy: {
+    id: 'pro_annual_legacy',
     name: 'Pro Annual',
     amount: 999900,
     currency: 'INR',

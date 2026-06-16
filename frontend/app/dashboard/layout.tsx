@@ -55,7 +55,7 @@ function Avatar({ name, url, size = 36 }: { name?: string | null; url?: string |
 function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: () => void; onLogout: () => void }) {
   const pathname = usePathname()
   const { userData } = useUser()
-  const { subscription, isPro, optimizationsRemaining } = useSubscription()
+  const { subscription, isPro, optimizationsRemaining, setShowUpgradeModal, setUpgradeReason } = useSubscription()
 
   return (
     <div className="flex flex-col h-full"
@@ -120,10 +120,11 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
           style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(37,99,235,0.3)' }}>
           <p className="text-xs font-bold text-white mb-1">⚡ Upgrade to Pro</p>
           <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Unlimited optimizations & rows</p>
-          <Link href="/dashboard/settings?tab=Billing" className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-block"
-            style={{ background: 'var(--accent-primary)', color: 'white' }}>
+          <button onClick={() => { setUpgradeReason('Upgrade for unlimited optimizations and rows'); setShowUpgradeModal(true) }}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+            style={{ background: 'var(--accent-primary)', color: 'white', border: 'none', cursor: 'pointer' }}>
             Upgrade Now
-          </Link>
+          </button>
         </div>
       )}
 
@@ -233,7 +234,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
           {/* Plan Badge in top bar */}
           {!isPro && (
-            <Link href="/dashboard/settings" className="text-xs px-3 py-1.5 rounded-full font-medium hidden md:block transition-all duration-200"
+            <button onClick={() => { setUpgradeReason('Upgrade for unlimited optimizations and rows'); setShowUpgradeModal(true) }}
+              className="text-xs px-3 py-1.5 rounded-full font-medium hidden md:block transition-all duration-200"
               style={{
                 background: 'linear-gradient(135deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.15) 100%)',
                 color: 'var(--accent-primary)',
@@ -243,7 +245,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-primary)'; e.currentTarget.style.color = 'white' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.15) 100%)'; e.currentTarget.style.color = 'var(--accent-primary)' }}>
               ⚡ Upgrade
-            </Link>
+            </button>
           )}
           {isPro && (
             <span className="text-xs px-2.5 py-1 rounded-full font-medium hidden md:block"

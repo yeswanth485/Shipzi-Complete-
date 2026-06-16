@@ -7,18 +7,33 @@ import { createChildLogger } from '../config/logger';
 import { AppError } from '../middlewares/error.middleware';
 import { AUDIT_ACTIONS, CURRENCY, MIN_PAYMENT_AMOUNT, MAX_PAYMENT_AMOUNT } from '../constants/payment.constants';
 import { CreateOrderResponse, VerifyPaymentRequest, VerifyPaymentResponse, PaymentRecord, PaginatedResponse } from '../types/payment.types';
+import { supabase } from '../config/supabase';
 
 const logger = createChildLogger('payment-service');
 
 const PLAN_AMOUNTS: Record<string, number> = {
+  // Shipzi subscription plans (UI prices)
+  pro: 249900,
+  enterprise: 999900,
+  pro_annual: 199900,
+  enterprise_annual: 799900,
+  // Legacy credit-based plans
   basic_monthly: 49900,
   pro_monthly: 99900,
   basic_annual: 499900,
-  pro_annual: 999900,
+  pro_annual_legacy: 999900,
   starter_pack: 9900,
   growth_pack: 29900,
   enterprise_pack: 99900,
 };
+
+// Map plan ID to subscription plan name
+function getSubscriptionPlan(planId: string): 'growth' | 'enterprise' {
+  if (planId === 'enterprise' || planId === 'enterprise_annual' || planId === 'enterprise_pack') {
+    return 'enterprise';
+  }
+  return 'growth';
+}
 
 export const paymentService = {
   async createOrder(
@@ -164,6 +179,68 @@ export const paymentService = {
     });
 
     logger.info('Payment verified and captured', { paymentId: payment.id });
+
+    // Activate subscription after successful payment
+    try {
+      const planId = (payment.notes as Record<string, string>)?.plan_id;
+      if (planId && planId !== 'starter_pack' && planId !== 'growth_pack' && planId !== 'enterprise_pack') {
+        const subscriptionPlan = getSubscriptionPlan(planId);
+
+        // Find user's company_id from users table
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', userId)
+          .single();
+
+        if (userRow?.company_id) {
+          // Check if subscription already exists
+          const { data: existingSub } = await supabase
+            .from('subscriptions')
+            .select('id')
+            .eq('company_id', userRow.company_id)
+            .single();
+
+          if (existingSub) {
+            // Update existing subscription
+            await supabase
+              .from('subscriptions')
+              .update({
+                plan: subscriptionPlan,
+                status: 'active',
+                current_usage: 0,
+                monthly_shipment_limit: subscriptionPlan === 'enterprise' ? -1 : 10000,
+              })
+              .eq('id', existingSub.id);
+          } else {
+            // Create new subscription
+            await supabase
+              .from('subscriptions')
+              .insert({
+                company_id: userRow.company_id,
+                plan: subscriptionPlan,
+                status: 'active',
+                current_usage: 0,
+                monthly_shipment_limit: subscriptionPlan === 'enterprise' ? -1 : 10000,
+              });
+          }
+
+          logger.info('Subscription activated', { userId, plan: subscriptionPlan, companyId: userRow.company_id });
+
+          await auditRepository.log({
+            user_id: userId,
+            actor: userId,
+            action: 'SUBSCRIPTION_ACTIVATED',
+            entity_type: 'subscription',
+            entity_id: payment.id,
+            new_data: { plan: subscriptionPlan, payment_id: payment.id },
+          });
+        }
+      }
+    } catch (subErr) {
+      // Non-fatal — payment succeeded but subscription update failed
+      logger.error('Failed to activate subscription after payment', { error: subErr });
+    }
 
     return {
       success: true,

@@ -7,6 +7,7 @@ import { useUser } from '@/context/UserContext'
 import { useSubscription } from '@/context/SubscriptionContext'
 import { useSearchParams } from 'next/navigation'
 import { Check, Eye, EyeOff, Copy, Crown } from 'lucide-react'
+import { PaymentModal } from '@/components/payment/PaymentModal'
 
 const TABS = ['Profile', 'Company', 'Notifications', 'Billing']
 const INDUSTRIES = ['E-Commerce', 'Retail', 'Manufacturing', 'Healthcare', 'Food & Beverage', 'Electronics', 'Fashion', 'Other']
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
+  const [upgradeModal, setUpgradeModal] = useState<{ planId: string; planName: string; amount: number } | null>(null)
 
   // Profile state
   const [fullName, setFullName] = useState('')
@@ -395,8 +397,8 @@ export default function SettingsPage() {
                   {/* Upgrade Plans */}
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { plan: 'Pro', price: '₹2,499/mo', features: ['5,000 optimizations/month', '10 users', 'Bulk CSV up to 10,000 rows', 'Advanced analytics dashboard', 'AI insights + reasons', 'Priority email support'], highlighted: isPro },
-                      { plan: 'Max', price: '₹9,999/mo', features: ['Unlimited optimizations', 'Unlimited users', 'Bulk CSV: no row limit', 'SSO (SAML/OIDC)', 'REST API access', 'Dedicated account manager'], highlighted: false },
+                      { plan: 'Pro', planId: 'pro', price: '₹2,499/mo', amount: 249900, features: ['5,000 optimizations/month', '10 users', 'Bulk CSV up to 10,000 rows', 'Advanced analytics dashboard', 'AI insights + reasons', 'Priority email support'], highlighted: isPro },
+                      { plan: 'Max', planId: 'enterprise', price: '₹9,999/mo', amount: 999900, features: ['Unlimited optimizations', 'Unlimited users', 'Bulk CSV: no row limit', 'SSO (SAML/OIDC)', 'REST API access', 'Dedicated account manager'], highlighted: false },
                     ].map(p => (
                       <div key={p.plan} className="glass-card p-5 relative overflow-hidden"
                         style={p.highlighted ? { border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.04)' } : {}}>
@@ -411,11 +413,17 @@ export default function SettingsPage() {
                         <ul className="space-y-1.5 mb-4">
                           {p.features.map(f => <li key={f} className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--accent-success)' }}>✓</span>{f}</li>)}
                         </ul>
-                        <button onClick={() => setToast(p.highlighted ? 'You are on this plan' : 'Coming soon — contact sales@shipzi.com')}
+                        <button onClick={() => {
+                            if (p.highlighted) {
+                              setToast('You are on this plan')
+                            } else {
+                              setUpgradeModal({ planId: p.planId, planName: p.plan + ' Plan', amount: p.amount })
+                            }
+                          }}
                           className={`${p.highlighted ? 'btn-ghost' : 'btn-ghost'} w-full text-sm`}
                           style={{ padding: '8px' }}
                           disabled={p.highlighted}>
-                          {p.highlighted ? 'Current Plan' : p.plan === 'Max' ? 'Contact Sales' : 'Upgrade'}
+                          {p.highlighted ? 'Current Plan' : 'Upgrade'}
                         </button>
                       </div>
                     ))}
@@ -464,6 +472,21 @@ export default function SettingsPage() {
       </div>
 
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
+
+      {upgradeModal && (
+        <PaymentModal
+          isOpen={!!upgradeModal}
+          onClose={() => setUpgradeModal(null)}
+          planId={upgradeModal.planId}
+          planName={upgradeModal.planName}
+          amount={upgradeModal.amount}
+          onSuccess={async () => {
+            setUpgradeModal(null)
+            setToast('Payment successful! Your plan has been activated.')
+            await refreshSubscription()
+          }}
+        />
+      )}
     </div>
   )
 }
