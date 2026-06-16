@@ -1,74 +1,192 @@
 -- ============================================================================
 -- SHIPZI PAYMENT SYSTEM — Complete Database Foundation
 -- Tables: users, payments, payment_events, refunds, subscriptions, credits, audit_logs
+-- Safe to re-run: uses IF NOT EXISTS and ADD COLUMN IF NOT EXISTS
 -- ============================================================================
 
 -- ============================================================================
--- TABLE 1: users
--- Stores all registered users of Shipzi
+-- SAFETY: Add missing columns to existing tables
+-- These run FIRST so tables created by earlier partial runs get new columns
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20),
-    razorpay_customer_id VARCHAR(100) UNIQUE,
-    is_active BOOLEAN DEFAULT true,
-    deleted_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-);
+-- Users table — add columns if table already exists but is incomplete
+ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_razorpay_customer_id_key') THEN
+        ALTER TABLE users ADD CONSTRAINT users_razorpay_customer_id_key UNIQUE (razorpay_customer_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_format') THEN
+        ALTER TABLE users ADD CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+    END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_razorpay_customer_id ON users(razorpay_customer_id);
-CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE deleted_at IS NULL;
-
-COMMENT ON TABLE users IS 'Registered users of Shipzi platform with optional Razorpay customer binding';
+-- Payments table — add columns if table already exists but is incomplete
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(100);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_signature VARCHAR(500);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'INR';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'created';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS notes JSONB DEFAULT '{}';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS error_code VARCHAR(100);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS error_description TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS captured_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_razorpay_order_id_key') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_razorpay_order_id_key UNIQUE (razorpay_order_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_razorpay_payment_id_key') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_razorpay_payment_id_key UNIQUE (razorpay_payment_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_idempotency_key_key') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_idempotency_key_key UNIQUE (idempotency_key);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_status_check') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK (status IN ('created', 'attempted', 'paid', 'failed', 'cancelled', 'refunded', 'partially_refunded'));
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_amount_positive') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_amount_positive CHECK (amount > 0);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_currency_length') THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_currency_length CHECK (char_length(currency) = 3);
+    END IF;
+END $$;
 
 -- ============================================================================
--- TABLE 2: payments
--- Core payments table. Every Razorpay payment attempt is stored here.
--- Amount is ALWAYS in paise (INR minor units), NEVER in rupees.
+-- SAFETY: Add missing columns to existing tables (remaining tables)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
-    razorpay_payment_id VARCHAR(100) UNIQUE,
-    razorpay_signature VARCHAR(500),
-    amount INTEGER NOT NULL,
-    currency VARCHAR(10) DEFAULT 'INR' NOT NULL,
-    status VARCHAR(30) NOT NULL,
-    description TEXT,
-    notes JSONB DEFAULT '{}',
-    metadata JSONB DEFAULT '{}',
-    idempotency_key VARCHAR(100) UNIQUE NOT NULL,
-    payment_method VARCHAR(50),
-    error_code VARCHAR(100),
-    error_description TEXT,
-    captured_at TIMESTAMPTZ,
-    failed_at TIMESTAMPTZ,
-    deleted_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    CONSTRAINT payments_status_check CHECK (
-        status IN ('created', 'attempted', 'paid', 'failed', 'cancelled', 'refunded', 'partially_refunded')
-    ),
-    CONSTRAINT payments_amount_positive CHECK (amount > 0),
-    CONSTRAINT payments_currency_length CHECK (char_length(currency) = 3)
-);
+-- Payment events table
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE SET NULL;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_id VARCHAR(100);
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS event_type VARCHAR(100);
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}';
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'received';
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payment_events_event_id_key') THEN
+        ALTER TABLE payment_events ADD CONSTRAINT payment_events_event_id_key UNIQUE (event_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payment_events_status_check') THEN
+        ALTER TABLE payment_events ADD CONSTRAINT payment_events_status_check CHECK (status IN ('received', 'processing', 'processed', 'failed', 'dead_letter'));
+    END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
-CREATE INDEX IF NOT EXISTS idx_payments_razorpay_order_id ON payments(razorpay_order_id);
-CREATE INDEX IF NOT EXISTS idx_payments_razorpay_payment_id ON payments(razorpay_payment_id);
-CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
-CREATE INDEX IF NOT EXISTS idx_payments_idempotency_key ON payments(idempotency_key);
-CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC);
+-- Refunds table
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE RESTRICT;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS razorpay_refund_id VARCHAR(100);
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS reason VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'initiated';
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'full';
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS notes JSONB DEFAULT '{}';
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE refunds ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'refunds_razorpay_refund_id_key') THEN
+        ALTER TABLE refunds ADD CONSTRAINT refunds_razorpay_refund_id_key UNIQUE (razorpay_refund_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'refunds_status_check') THEN
+        ALTER TABLE refunds ADD CONSTRAINT refunds_status_check CHECK (status IN ('initiated', 'pending', 'processed', 'failed'));
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'refunds_type_check') THEN
+        ALTER TABLE refunds ADD CONSTRAINT refunds_type_check CHECK (type IN ('full', 'partial'));
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'refunds_amount_positive') THEN
+        ALTER TABLE refunds ADD CONSTRAINT refunds_amount_positive CHECK (amount > 0);
+    END IF;
+END $$;
 
-COMMENT ON TABLE payments IS 'Every Razorpay payment attempt and result, amount in paise';
+-- Subscriptions table
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(100);
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan_id VARCHAR(50) NOT NULL DEFAULT '';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'created';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS current_start TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS current_end TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_start TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_end BOOLEAN DEFAULT false;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_razorpay_subscription_id_key') THEN
+        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_razorpay_subscription_id_key UNIQUE (razorpay_subscription_id);
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_status_check') THEN
+        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('created', 'authenticated', 'active', 'paused', 'cancelled', 'completed', 'expired'));
+    END IF;
+END $$;
+
+-- Credits table
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE SET NULL;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS refund_id UUID REFERENCES refunds(id) ON DELETE SET NULL;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS type VARCHAR(30) NOT NULL DEFAULT 'purchase';
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS balance_after INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'credits_type_check') THEN
+        ALTER TABLE credits ADD CONSTRAINT credits_type_check CHECK (type IN ('purchase', 'deduction', 'refund', 'admin_grant', 'admin_deduct', 'expiry'));
+    END IF;
+END $$;
+
+-- Audit logs table
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor VARCHAR(100) NOT NULL DEFAULT 'system';
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_type VARCHAR(50) NOT NULL DEFAULT '';
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_id UUID NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS old_data JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS new_data JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address INET;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
 
 -- ============================================================================
 -- TABLE 3: payment_events
