@@ -101,9 +101,10 @@ export function usePayment(userInfo?: { email?: string; contact?: string }) {
 
         const razorpay = new window.Razorpay(options);
         razorpay.on('payment.failed', (response: any) => {
+          console.error('Razorpay payment.failed:', response.error);
           setPaymentState({
             status: 'failed',
-            error: response.error?.description || 'Payment failed',
+            error: response.error?.description || response.error?.reason || 'Payment failed',
             paymentId: null,
             orderId: order.order_id,
           });

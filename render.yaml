@@ -3,7 +3,7 @@ services:
     name: shipzi-payments
     runtime: node
     region: oregon
-    plan: starter
+    plan: free
     autoDeploy: true
     branch: main
     buildCommand: cd backend && npm install && npm run build
@@ -13,7 +13,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 5000
+        value: 8080
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -31,4 +31,10 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: ALLOWED_ORIGINS
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
         sync: false
