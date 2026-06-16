@@ -1,12 +1,12 @@
 // Extend Shipzi's payment system with subscriptions.
 
 import { razorpay } from '../config/razorpay';
-import { supabase, executeQuery } from '../config/supabase';
+import { supabase } from '../config/supabase';
 import { auditRepository } from '../repositories/audit.repository';
 import { createChildLogger } from '../config/logger';
 import { AppError } from '../middlewares/error.middleware';
-import { SUBSCRIPTION_STATUS, AUDIT_ACTIONS } from '../constants/payment.constants';
-import { SUBSCRIPTION_PLANS, PlanConfig } from '../constants/plans.constants';
+import { AUDIT_ACTIONS } from '../constants/payment.constants';
+import { SUBSCRIPTION_PLANS } from '../constants/plans.constants';
 
 const logger = createChildLogger('subscription-service');
 
@@ -27,16 +27,16 @@ export const subscriptionService = {
     });
 
     // Store in DB
-    const record = await executeQuery(() =>
-      supabase.from('subscriptions').insert({
-        user_id: userId,
-        razorpay_subscription_id: subscription.id,
-        plan_id: planId,
-        status: 'created',
-        quantity: 1,
-        metadata: { razorpay_response: subscription },
-      }).select().single()
-    );
+    const { data: record, error: insertError } = await supabase.from('subscriptions').insert({
+      user_id: userId,
+      razorpay_subscription_id: subscription.id,
+      plan_id: planId,
+      status: 'created',
+      quantity: 1,
+      metadata: { razorpay_response: subscription },
+    }).select().single();
+
+    if (insertError) throw new Error(`Database error: ${insertError.message}`);
 
     await auditRepository.log({
       user_id: userId,
@@ -52,13 +52,11 @@ export const subscriptionService = {
   },
 
   async cancelSubscription(userId: string, subscriptionId: string, cancelAtEnd: boolean): Promise<void> {
-    const record = await executeQuery(() =>
-      supabase.from('subscriptions')
-        .select('*')
-        .eq('id', subscriptionId)
-        .eq('user_id', userId)
-        .single()
-    );
+    const { data: record } = await supabase.from('subscriptions')
+      .select('*')
+      .eq('id', subscriptionId)
+      .eq('user_id', userId)
+      .single();
 
     if (!record) {
       throw new AppError('Subscription not found', 404);
@@ -70,24 +68,18 @@ export const subscriptionService = {
     }
 
     if (cancelAtEnd) {
-      // Cancel at end of current billing cycle
-      await executeQuery(() =>
-        supabase.from('subscriptions')
-          .update({ cancel_at_end: true, cancelled_at: new Date().toISOString() })
-          .eq('id', subscriptionId)
-      );
+      await supabase.from('subscriptions')
+        .update({ cancel_at_end: true, cancelled_at: new Date().toISOString() })
+        .eq('id', subscriptionId);
     } else {
-      // Cancel immediately via Razorpay
       await (razorpay.subscriptions as any).cancel(sub.razorpay_subscription_id);
 
-      await executeQuery(() =>
-        supabase.from('subscriptions')
-          .update({
-            status: 'cancelled',
-            cancelled_at: new Date().toISOString(),
-          })
-          .eq('id', subscriptionId)
-      );
+      await supabase.from('subscriptions')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+        })
+        .eq('id', subscriptionId);
     }
 
     await auditRepository.log({
@@ -111,12 +103,10 @@ export const subscriptionService = {
 
     const razorpaySubId = subEntity.id;
 
-    const record = await executeQuery(() =>
-      supabase.from('subscriptions')
-        .select('*')
-        .eq('razorpay_subscription_id', razorpaySubId)
-        .single()
-    );
+    const { data: record } = await supabase.from('subscriptions')
+      .select('*')
+      .eq('razorpay_subscription_id', razorpaySubId)
+      .single();
 
     if (!record) {
       logger.warn('Subscription not found for webhook', { razorpaySubId });
@@ -127,43 +117,34 @@ export const subscriptionService = {
 
     switch (event) {
       case 'subscription.charged':
-        // Payment successful — renew subscription
-        await executeQuery(() =>
-          supabase.from('subscriptions')
-            .update({
-              status: 'active',
-              current_start: new Date(subEntity.current_start * 1000).toISOString(),
-              current_end: new Date(subEntity.current_end * 1000).toISOString(),
-            })
-            .eq('id', sub.id)
-        );
+        await supabase.from('subscriptions')
+          .update({
+            status: 'active',
+            current_start: new Date(subEntity.current_start * 1000).toISOString(),
+            current_end: new Date(subEntity.current_end * 1000).toISOString(),
+          })
+          .eq('id', sub.id);
         logger.info('Subscription charged', { subscriptionId: sub.id });
         break;
 
       case 'subscription.cancelled':
-        await executeQuery(() =>
-          supabase.from('subscriptions')
-            .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
-            .eq('id', sub.id)
-        );
+        await supabase.from('subscriptions')
+          .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+          .eq('id', sub.id);
         logger.info('Subscription cancelled via webhook', { subscriptionId: sub.id });
         break;
 
       case 'subscription.completed':
-        await executeQuery(() =>
-          supabase.from('subscriptions')
-            .update({ status: 'completed' })
-            .eq('id', sub.id)
-        );
+        await supabase.from('subscriptions')
+          .update({ status: 'completed' })
+          .eq('id', sub.id);
         logger.info('Subscription completed', { subscriptionId: sub.id });
         break;
 
       case 'subscription.paused':
-        await executeQuery(() =>
-          supabase.from('subscriptions')
-            .update({ status: 'paused' })
-            .eq('id', sub.id)
-        );
+        await supabase.from('subscriptions')
+          .update({ status: 'paused' })
+          .eq('id', sub.id);
         logger.info('Subscription paused', { subscriptionId: sub.id });
         break;
 

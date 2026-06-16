@@ -16,7 +16,7 @@ export const supabase: SupabaseClient = createClient(
 );
 
 export async function executeQuery<T>(
-  queryFn: () => Promise<{ data: T | null; error: any }>
+  queryFn: () => PromiseLike<{ data: T | null; error: any }>
 ): Promise<T> {
   const { data, error } = await queryFn();
   if (error) {

@@ -7,9 +7,10 @@ const sensitiveFields = ['password', 'secret', 'key', 'token', 'authorization'];
 
 const redactFormat = winston.format((info) => {
   if (info.message && typeof info.message === 'object') {
-    for (const key of Object.keys(info.message)) {
+    const msg = info.message as Record<string, unknown>;
+    for (const key of Object.keys(msg)) {
       if (sensitiveFields.some((f) => key.toLowerCase().includes(f))) {
-        info.message[key] = '[REDACTED]';
+        msg[key] = '[REDACTED]';
       }
     }
   }

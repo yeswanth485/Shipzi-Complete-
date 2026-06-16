@@ -5,6 +5,7 @@ import { paymentService } from '../services/payment.service';
 import { refundService } from '../services/refund.service';
 import { webhookService } from '../services/webhook.service';
 import { createChildLogger } from '../config/logger';
+import { WebhookRequest } from '../middlewares/webhook.middleware';
 
 const logger = createChildLogger('payment-controller');
 
@@ -45,7 +46,7 @@ export const paymentController = {
         userId,
         req.body,
         req.ip,
-        req.headers['user-agent']
+        typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined
       );
 
       res.status(200).json({
@@ -65,7 +66,7 @@ export const paymentController = {
         userId,
         req.body,
         req.ip,
-        req.headers['user-agent']
+        typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined
       );
 
       res.status(200).json({
@@ -78,9 +79,9 @@ export const paymentController = {
     }
   },
 
-  async webhookHandler(req: Request, res: Response): Promise<void> {
+  async webhookHandler(req: WebhookRequest, res: Response): Promise<void> {
     try {
-      const rawBody = (req as any).rawBody as Buffer;
+      const rawBody = req.rawBody;
       const signature = req.headers['x-razorpay-signature'] as string;
 
       if (!rawBody || !signature) {
@@ -103,7 +104,7 @@ export const paymentController = {
   async getPayment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { id } = req.params;
+      const id = req.params.id as string;
       const payment = await paymentService.getPayment(userId, id);
 
       res.status(200).json({
@@ -118,14 +119,11 @@ export const paymentController = {
   async getPaymentHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { page = 1, limit = 20, status } = req.query as any;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
 
-      const result = await paymentService.getPaymentHistory(
-        userId,
-        parseInt(page),
-        parseInt(limit),
-        status
-      );
+      const result = await paymentService.getPaymentHistory(userId, page, limit, status);
 
       res.status(200).json(result);
     } catch (error) {

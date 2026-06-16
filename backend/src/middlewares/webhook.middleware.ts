@@ -2,7 +2,11 @@
 
 import { Request, Response, NextFunction } from 'express';
 
-export function webhookBodyParser(req: Request, _res: Response, next: NextFunction): void {
+export interface WebhookRequest extends Request {
+  rawBody?: Buffer;
+}
+
+export function webhookBodyParser(req: WebhookRequest, _res: Response, next: NextFunction): void {
   if (req.method === 'POST' && req.headers['content-type']?.includes('application/json')) {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
