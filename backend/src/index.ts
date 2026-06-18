@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { bulkOptimize, buildOrderInsertRows, chunkArray } from './services/optimization-engine';
+import { bulkOptimize, bulkOptimizeMulti, buildOrderInsertRows, chunkArray } from './services/optimization-engine';
 import { CSVRow, CatalogBox } from './services/types';
 
 dotenv.config();
@@ -125,10 +125,11 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
   console.log(`\n[OPTIMIZE] Request received at ${new Date().toISOString()}`);
 
   try {
-    const { rawRows, companyId, runId } = req.body as {
+    const { rawRows, companyId, runId, mode } = req.body as {
       rawRows: CSVRow[];
       companyId: string;
       runId: string;
+      mode?: 'single' | 'multi';
     };
 
     // ── Validate inputs ─────────────────────────────────────────
@@ -197,12 +198,18 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
     }
 
     // ── 2. Run bulk optimization ────────────────────────────────
-    console.log('[OPTIMIZE] Step 2: Running bulk optimization...');
-    const result = await bulkOptimize(rawRows, catalog, (processed, total) => {
-      if (processed % 100 === 0 || processed === total) {
-        console.log(`[OPTIMIZE] Progress: ${processed}/${total}`);
-      }
-    });
+    console.log(`[OPTIMIZE] Step 2: Running ${mode === 'multi' ? 'multi-product' : 'single-product'} optimization...`);
+    const result = mode === 'multi'
+      ? await bulkOptimizeMulti(rawRows, catalog, (processed, total) => {
+          if (processed % 100 === 0 || processed === total) {
+            console.log(`[OPTIMIZE] Progress: ${processed}/${total}`);
+          }
+        })
+      : await bulkOptimize(rawRows, catalog, (processed, total) => {
+          if (processed % 100 === 0 || processed === total) {
+            console.log(`[OPTIMIZE] Progress: ${processed}/${total}`);
+          }
+        });
     console.log(`[OPTIMIZE] Optimization complete — ${result.summary.total} rows, ${result.summary.optimized} optimized, $${result.summary.total_savings.toFixed(2)} savings`);
 
     // ── 3. Insert optimized orders into DB ──────────────────────

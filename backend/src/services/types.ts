@@ -18,6 +18,22 @@ export interface CSVRow {
   // optional extras
   quantity?: string
   weight_kg?: string
+  // multi-product fields (pipe-separated)
+  order_id?: string
+  product_names?: string
+  product_lengths?: string
+  product_widths?: string
+  product_heights?: string
+  product_fragilities?: string
+}
+
+// ── Multi-product spec (parsed from pipe-separated fields) ──
+export interface ProductSpec {
+  name: string
+  length: number
+  width: number
+  height: number
+  fragility: number
 }
 
 // ── Parsed & validated product row ──

@@ -30,6 +30,7 @@ export async function POST(req: Request) {
         rawRows: rows,
         companyId: company_id,
         runId: run_id,
+        mode: mode || 'single',
       }),
       signal: AbortSignal.timeout(120000),
     })

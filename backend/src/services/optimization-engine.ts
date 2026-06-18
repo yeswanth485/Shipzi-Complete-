@@ -9,6 +9,7 @@ import {
   FitStatus,
   CSVRow,
   ValidationResult,
+  ProductSpec,
   calcDimWeight,
   calcShippingCost,
 } from './types'
@@ -521,4 +522,256 @@ export function chunkArray<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size))
   }
   return chunks
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MULTI-PRODUCT SUPPORT
+// ══════════════════════════════════════════════════════════════════
+
+export function parseMultiProductRow(row: CSVRow): ProductSpec[] | null {
+  const names = (row.product_names || '').split('|').map(s => s.trim()).filter(Boolean)
+  const lengths = (row.product_lengths || '').split('|').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0)
+  const widths = (row.product_widths || '').split('|').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0)
+  const heights = (row.product_heights || '').split('|').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0)
+  const fragilities = (row.product_fragilities || '').split('|').map(s => parseFloat(s.trim()))
+
+  if (names.length === 0 || lengths.length !== names.length || widths.length !== names.length || heights.length !== names.length) {
+    return null
+  }
+
+  return names.map((name, i) => ({
+    name,
+    length: lengths[i],
+    width: widths[i],
+    height: heights[i],
+    fragility: !isNaN(fragilities[i]) ? fragilities[i] : 0,
+  }))
+}
+
+function computeCombinedDimensions(products: ProductSpec[]) {
+  const combinedLength = Math.max(...products.map(p => p.length))
+  const combinedWidth = Math.max(...products.map(p => p.width))
+  const combinedHeight = Math.max(...products.map(p => p.height))
+  const maxFragility = Math.max(...products.map(p => p.fragility))
+  const productNames = products.map(p => p.name).join(', ')
+
+  return { combinedLength, combinedWidth, combinedHeight, maxFragility, productCount: products.length, productNames }
+}
+
+export function selectOptimalBoxMultiProduct(
+  orderId: string,
+  products: ProductSpec[],
+  usedBoxLength: number,
+  usedBoxWidth: number,
+  usedBoxHeight: number,
+  usedBoxPrice: number,
+  shippingZone: string,
+  catalog: CatalogBox[],
+): OptimizationResult {
+  const { combinedLength, combinedWidth, combinedHeight, maxFragility, productCount, productNames } =
+    computeCombinedDimensions(products)
+
+  const pad = fragilityPadding(maxFragility)
+  const minL = combinedLength + pad
+  const minW = combinedWidth + pad
+  const minH = combinedHeight + pad
+  const minWeight = products.length * 0.5
+
+  const originalBoxDims = `${usedBoxLength}×${usedBoxWidth}×${usedBoxHeight}`
+  const originalBoxVol = usedBoxLength * usedBoxWidth * usedBoxHeight
+  const originalDimWeight = calcDimWeight(usedBoxLength, usedBoxWidth, usedBoxHeight)
+  const originalShipping = calcShippingCost(originalDimWeight, minWeight, shippingZone)
+
+  function boxFitsGroup(box: CatalogBox): boolean {
+    const boxDims = [box.length_cm, box.width_cm, box.height_cm].sort((a, b) => b - a)
+    const prodDims = [minL, minW, minH].sort((a, b) => b - a)
+    const EPSILON = 0.05
+    return (
+      boxDims[0] >= prodDims[0] - EPSILON &&
+      boxDims[1] >= prodDims[1] - EPSILON &&
+      boxDims[2] >= prodDims[2] - EPSILON &&
+      box.max_weight_kg >= minWeight - EPSILON
+    )
+  }
+
+  const fittingBoxes = catalog.filter(boxFitsGroup)
+
+  if (fittingBoxes.length === 0) {
+    return {
+      row_index: 0,
+      product_name: `${orderId} (${productCount} products)`,
+      original_box_dimensions: originalBoxDims,
+      original_box_price: usedBoxPrice,
+      optimized_box_dimensions: originalBoxDims,
+      optimized_box_price: usedBoxPrice,
+      recommended_box_id: null,
+      recommended_box_name: 'No fit found',
+      shipping_zone: shippingZone,
+      savings: 0,
+      fit_status: 'no_fit',
+      optimization_reason: `No box in catalog fits all ${productCount} products together (${productNames}). Combined: ${combinedLength}×${combinedWidth}×${combinedHeight}cm.`,
+      utilization_pct: 0,
+      dimensional_weight_kg: originalDimWeight,
+      sustainability_score: 0,
+      parsed_product: {
+        product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
+        product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+        used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
+        shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
+      },
+      recommended_box: null,
+    }
+  }
+
+  const smallerFittingBoxes = fittingBoxes.filter(b => {
+    const boxVol = b.length_cm * b.width_cm * b.height_cm
+    return boxVol < originalBoxVol
+  })
+
+  if (smallerFittingBoxes.length === 0) {
+    const bestFit = fittingBoxes
+      .map(b => {
+        const boxVol = b.length_cm * b.width_cm * b.height_cm
+        const utilization = (combinedLength * combinedWidth * combinedHeight / boxVol) * 100
+        return { box: b, utilization }
+      })
+      .sort((a, b) => b.utilization - a.utilization)[0]
+
+    const dimWeight = calcDimWeight(bestFit.box.length_cm, bestFit.box.width_cm, bestFit.box.height_cm)
+    const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
+    const newTotalCost = bestFit.box.cost_per_box_usd + shipping
+    const originalTotalCost = usedBoxPrice + originalShipping
+
+    return {
+      row_index: 0,
+      product_name: `${orderId} (${productCount} products)`,
+      original_box_dimensions: originalBoxDims,
+      original_box_price: usedBoxPrice,
+      optimized_box_dimensions: `${bestFit.box.length_cm}×${bestFit.box.width_cm}×${bestFit.box.height_cm}`,
+      optimized_box_price: bestFit.box.cost_per_box_usd,
+      recommended_box_id: bestFit.box.id,
+      recommended_box_name: bestFit.box.box_name,
+      shipping_zone: shippingZone,
+      savings: parseFloat((originalTotalCost - newTotalCost).toFixed(2)),
+      fit_status: 'same_box',
+      optimization_reason: `Current box is already the best fit for ${productCount} products.`,
+      utilization_pct: parseFloat(bestFit.utilization.toFixed(1)),
+      dimensional_weight_kg: dimWeight,
+      sustainability_score: bestFit.box.sustainability_score,
+      parsed_product: {
+        product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
+        product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+        used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
+        shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
+      },
+      recommended_box: bestFit.box,
+    }
+  }
+
+  const bestBox = smallerFittingBoxes
+    .map(b => {
+      const boxVol = b.length_cm * b.width_cm * b.height_cm
+      const utilization = (combinedLength * combinedWidth * combinedHeight / boxVol) * 100
+      const dimWeight = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
+      const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
+      const totalCost = b.cost_per_box_usd + shipping
+      return { box: b, utilization, totalCost }
+    })
+    .sort((a, b) => a.totalCost - b.totalCost)[0]
+
+  const dimWeight = calcDimWeight(bestBox.box.length_cm, bestBox.box.width_cm, bestBox.box.height_cm)
+  const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
+  const newTotalCost = bestBox.box.cost_per_box_usd + shipping
+  const originalTotalCost = usedBoxPrice + originalShipping
+
+  return {
+    row_index: 0,
+    product_name: `${orderId} (${productCount} products)`,
+    original_box_dimensions: originalBoxDims,
+    original_box_price: usedBoxPrice,
+    optimized_box_dimensions: `${bestBox.box.length_cm}×${bestBox.box.width_cm}×${bestBox.box.height_cm}`,
+    optimized_box_price: bestBox.box.cost_per_box_usd,
+    recommended_box_id: bestBox.box.id,
+    recommended_box_name: bestBox.box.box_name,
+    shipping_zone: shippingZone,
+    savings: parseFloat((originalTotalCost - newTotalCost).toFixed(2)),
+    fit_status: 'optimized',
+    optimization_reason: `Optimized from ${originalBoxDims} to ${bestBox.box.box_name} for ${productCount} products — saves $${(originalTotalCost - newTotalCost).toFixed(2)}.`,
+    utilization_pct: parseFloat(bestBox.utilization.toFixed(1)),
+    dimensional_weight_kg: dimWeight,
+    sustainability_score: bestBox.box.sustainability_score,
+    parsed_product: {
+      product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
+      product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+      used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
+      shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
+    },
+    recommended_box: bestBox.box,
+  }
+}
+
+export async function bulkOptimizeMulti(
+  rawRows: CSVRow[],
+  catalog: CatalogBox[],
+  onProgress?: (processed: number, total: number) => void,
+): Promise<BulkResult> {
+  const results: OptimizationResult[] = []
+  const invalidRows: BulkResult['invalidRows'] = []
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i]
+    const orderId = row.order_id || `ORD-${i + 1}`
+
+    const products = parseMultiProductRow(row)
+    if (!products || products.length === 0) {
+      invalidRows.push({ rowIndex: i, errors: ['No valid products found in row'] })
+      onProgress?.(i + 1, rawRows.length)
+      continue
+    }
+
+    try {
+      const result = selectOptimalBoxMultiProduct(
+        orderId,
+        products,
+        parseFloat(row.used_box_length),
+        parseFloat(row.used_box_width),
+        parseFloat(row.used_box_height),
+        parseFloat(row.used_box_price),
+        row.shipping_zone,
+        catalog,
+      )
+      results.push(result)
+    } catch (err) {
+      invalidRows.push({
+        rowIndex: i,
+        errors: [err instanceof Error ? err.message : 'Processing error'],
+      })
+    }
+
+    onProgress?.(i + 1, rawRows.length)
+  }
+
+  const optimized = results.filter(r => r.fit_status === 'optimized').length
+  const sameBox = results.filter(r => r.fit_status === 'same_box').length
+  const noFit = results.filter(r => r.fit_status === 'no_fit').length
+  const totalSavings = results.reduce((s, r) => s + r.savings, 0)
+  const avgUtil = results.length
+    ? results.reduce((s, r) => s + r.utilization_pct, 0) / results.length
+    : 0
+
+  return {
+    results,
+    invalidRows,
+    summary: {
+      total: rawRows.length,
+      valid: results.length,
+      invalid: invalidRows.length,
+      optimized,
+      same_box: sameBox,
+      no_fit: noFit,
+      total_savings: parseFloat(totalSavings.toFixed(2)),
+      avg_utilization: parseFloat(avgUtil.toFixed(1)),
+      ml_used: false,
+    },
+  }
 }
