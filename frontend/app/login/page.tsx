@@ -62,9 +62,10 @@ export default function LoginPage() {
           onboarding_complete: false,
         }, { onConflict: 'id' })
       }
-      await handlePostAuth(cred.user.uid, false)
+      await handlePostAuth(cred.user.uid, !existing)
     } catch {
       setError('Invalid email or password. Please try again.')
+    } finally {
       setLoading(false)
     }
   }
@@ -94,6 +95,7 @@ export default function LoginPage() {
       } else {
         setError(`Registration failed: ${msg}`)
       }
+    } finally {
       setLoading(false)
     }
   }
@@ -105,22 +107,15 @@ export default function LoginPage() {
       const uid = result.user.uid
       const { data: existing } = await supabase
         .from('users')
-        .select('id')
+        .select('id, onboarding_complete')
         .eq('id', uid)
         .single()
-      const isNew = !existing
-      await supabase.from('users').upsert({
-        id: uid,
-        email: result.user.email!,
-        full_name: result.user.displayName,
-        avatar_url: result.user.photoURL,
-        onboarding_complete: false,
-      }, { onConflict: 'id' })
-      await handlePostAuth(uid, isNew)
+      await handlePostAuth(uid, !existing)
     } catch (err: any) {
       console.error('Google sign-in error:', err)
       const msg = err.message || 'Unknown error occurred'
       setError(`Google sign-in failed: ${msg}`)
+    } finally {
       setLoading(false)
     }
   }

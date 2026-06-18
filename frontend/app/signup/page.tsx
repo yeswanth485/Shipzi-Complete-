@@ -72,20 +72,27 @@ export default function SignupPage() {
     try {
       const result = await signInWithPopup(auth, new GoogleAuthProvider())
       const uid = result.user.uid
-      // Upsert user row
-      await supabase.from('users').upsert({
-        id:                  uid,
-        email:               result.user.email!,
-        full_name:           result.user.displayName,
-        avatar_url:          result.user.photoURL,
-        onboarding_complete: false,
-      }, { onConflict: 'id' })
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', uid)
+        .single()
+      if (!existing) {
+        await supabase.from('users').upsert({
+          id: uid,
+          email: result.user.email!,
+          full_name: result.user.displayName,
+          avatar_url: result.user.photoURL,
+          onboarding_complete: false,
+        }, { onConflict: 'id' })
+      }
       setAuthCookieLocal(uid)
       router.push('/onboarding')
     } catch (err: any) {
       console.error('Google sign-up error:', err)
       const msg = err.message || 'Unknown error occurred'
       setServerError(`Google sign-up failed: ${msg}`)
+    } finally {
       setLoading(false)
     }
   }

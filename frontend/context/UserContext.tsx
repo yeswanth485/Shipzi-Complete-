@@ -99,7 +99,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user)
       if (user) {
-        await fetchUserData(user)
+        try {
+          await fetchUserData(user)
+        } catch (e) {
+          console.error('fetchUserData failed:', e)
+        }
       } else {
         setUserData(null)
       }

@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const authCookie = request.cookies.get('shipzi-auth')
@@ -11,8 +9,7 @@ export function middleware(request: NextRequest) {
   const isProtectedRoute = pathname.startsWith('/dashboard') || pathname === '/onboarding'
   const isAuthRoute = pathname === '/login' || pathname === '/signup'
 
-  // Validate auth cookie is a valid UUID format (not forged arbitrary string)
-  const hasValidAuth = authCookie && UUID_REGEX.test(authCookie.value)
+  const hasValidAuth = !!authCookie?.value && authCookie.value.length >= 20
 
   if (isProtectedRoute && !hasValidAuth) {
     return NextResponse.redirect(new URL('/login', request.url))

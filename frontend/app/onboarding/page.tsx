@@ -125,21 +125,32 @@ export default function OnboardingPage() {
     setSubmitError('')
     try {
       const volumeMap: Record<string, number> = { '< 500': 100, '500–5K': 2500, '5K–50K': 25000, '50K+': 100000 }
-      
-      // 1. Create company
-      const { data: company, error: companyError } = await supabase.from('companies').insert({
-        name: form.companyName,
-        logo_url: form.logoUrl || null,
-        industry: form.industry,
-        warehouse_size: form.warehouseSize,
-        monthly_shipment_volume: volumeMap[form.volume] ?? null,
-        packaging_goals: form.packagingGoals,
-        sustainability_goals: form.sustainabilityGoals,
-        shipping_regions: form.regions,
-      }).select().single()
 
-      if (companyError) throw new Error(`Company creation failed: ${companyError.message}`)
-      if (!company) throw new Error('Company creation returned no data.')
+      // Check if user already has a company (created by UserContext)
+      const { data: currentUser } = await supabase.from('users')
+        .select('company_id')
+        .eq('id', firebaseUser.uid)
+        .single()
+
+      let companyId = currentUser?.company_id
+
+      if (!companyId) {
+        // 1. Create company
+        const { data: company, error: companyError } = await supabase.from('companies').insert({
+          name: form.companyName,
+          logo_url: form.logoUrl || null,
+          industry: form.industry,
+          warehouse_size: form.warehouseSize,
+          monthly_shipment_volume: volumeMap[form.volume] ?? null,
+          packaging_goals: form.packagingGoals,
+          sustainability_goals: form.sustainabilityGoals,
+          shipping_regions: form.regions,
+        }).select().single()
+
+        if (companyError) throw new Error(`Company creation failed: ${companyError.message}`)
+        if (!company) throw new Error('Company creation returned no data.')
+        companyId = company.id
+      }
 
       // 2. Ensure user row exists, then update with company_id
       const { data: existingUser } = await supabase.from('users')
@@ -147,25 +158,24 @@ export default function OnboardingPage() {
         .eq('id', firebaseUser.uid)
         .single()
       if (!existingUser) {
-        // Insert user row if it somehow doesn't exist yet
         await supabase.from('users').upsert({
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
           full_name: firebaseUser.displayName || '',
           avatar_url: firebaseUser.photoURL || '',
-          company_id: company.id,
+          company_id: companyId,
           onboarding_complete: true,
         }, { onConflict: 'id' })
       } else {
         const { error: userError } = await supabase.from('users')
-          .update({ company_id: company.id, onboarding_complete: true })
+          .update({ company_id: companyId, onboarding_complete: true })
           .eq('id', firebaseUser.uid)
         if (userError) throw new Error(`User update failed: ${userError.message}`)
       }
 
       // 3. Create subscription (ignore if already exists)
       await supabase.from('subscriptions')
-        .insert({ company_id: company.id, plan: 'free', monthly_shipment_limit: 100 })
+        .insert({ company_id: companyId, plan: 'free', monthly_shipment_limit: 100 })
 
       // 4. Set cookie FIRST so middleware allows /dashboard, then redirect immediately
       setOnboardingComplete()
