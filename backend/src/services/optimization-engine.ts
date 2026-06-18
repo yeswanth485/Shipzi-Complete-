@@ -728,19 +728,82 @@ export async function bulkOptimizeMulti(
 ): Promise<BulkResult> {
   const results: OptimizationResult[] = []
   const invalidRows: BulkResult['invalidRows'] = []
+  let mlUsed = false
+
+  // Pre-parse all valid rows and build combined-dimension products for ML
+  const parsedOrders: Array<{
+    index: number
+    orderId: string
+    products: ProductSpec[]
+    row: CSVRow
+  }> = []
 
   for (let i = 0; i < rawRows.length; i++) {
     const row = rawRows[i]
     const orderId = row.order_id || `ORD-${i + 1}`
-
     const products = parseMultiProductRow(row)
     if (!products || products.length === 0) {
       invalidRows.push({ rowIndex: i, errors: ['No valid products found in row'] })
       onProgress?.(i + 1, rawRows.length)
       continue
     }
+    parsedOrders.push({ index: i, orderId, products, row })
+  }
 
+  // Build ML input: combined dimensions for each order
+  const mlInput = parsedOrders.map(({ products, row }) => {
+    const { combinedLength, combinedWidth, combinedHeight, maxFragility } =
+      computeCombinedDimensions(products)
+    return {
+      product_name: products.map(p => p.name).join('|'),
+      product_length: combinedLength,
+      product_width: combinedWidth,
+      product_height: combinedHeight,
+      fragility_score: maxFragility,
+      shipping_zone: row.shipping_zone || 'Unknown',
+      used_box_price: parseFloat(row.used_box_price || '0'),
+    }
+  })
+
+  // Call ML bridge for multi-product orders
+  const mlUrl = getMLBridgeUrl()
+  const mlEnabled = isMLEnabled()
+  let mlResults: Record<number, MLEnhancement> = {}
+
+  if (mlEnabled && mlInput.length > 0) {
     try {
+      console.log(`[ML] Calling ML bridge at ${mlUrl}/ml/bulk for ${mlInput.length} multi-product orders...`)
+      const mlHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (process.env.ML_API_KEY) {
+        mlHeaders['Authorization'] = `Bearer ${process.env.ML_API_KEY}`
+      }
+      const res = await fetch(`${mlUrl}/ml/bulk`, {
+        method: 'POST',
+        headers: mlHeaders,
+        body: JSON.stringify(mlInput),
+        signal: AbortSignal.timeout(15000)
+      })
+      if (res.ok) {
+        const data: MLEnhancement[] = await res.json()
+        data.forEach((item, idx) => {
+          if (item && !('error' in item)) {
+            mlResults[parsedOrders[idx].index] = item
+          }
+        })
+        mlUsed = true
+        console.log(`[ML] ML bridge responded — ${Object.keys(mlResults).length}/${parsedOrders.length} multi-product orders enhanced`)
+      } else {
+        console.warn(`[ML] ML bridge returned status ${res.status} — using rule-based fallback for multi-product`)
+      }
+    } catch (err) {
+      console.warn(`[ML] ML bridge unreachable for multi-product — using rule-based fallback. Error:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  // Process each order with optional ML enhancement
+  for (const { index: i, orderId, products, row } of parsedOrders) {
+    try {
+      const mlResult = mlResults[i] || null
       const result = selectOptimalBoxMultiProduct(
         orderId,
         products,
@@ -751,6 +814,24 @@ export async function bulkOptimizeMulti(
         row.shipping_zone,
         catalog,
       )
+
+      // Apply ML enhancement if available
+      if (mlResult && mlResult.recommended_box_name) {
+        const mlBox = catalog.find(b => b.box_name === mlResult.recommended_box_name)
+        if (mlBox) {
+          // Use ML-recommended box if it exists in catalog
+          const { combinedLength, combinedWidth, combinedHeight } = computeCombinedDimensions(products)
+          const pad = fragilityPadding(Math.max(...products.map(p => p.fragility)))
+          const boxDims = [mlBox.length_cm, mlBox.width_cm, mlBox.height_cm].sort((a, b) => b - a)
+          const prodDims = [combinedLength + pad, combinedWidth + pad, combinedHeight + pad].sort((a, b) => b - a)
+          if (boxDims[0] >= prodDims[0] && boxDims[1] >= prodDims[1] && boxDims[2] >= prodDims[2]) {
+            result.ml_confidence_pct = mlResult.ml_confidence_pct
+            result.ml_recommended_box = mlResult.recommended_box_name
+            result.ml_enhanced = true
+          }
+        }
+      }
+
       results.push(result)
     } catch (err) {
       invalidRows.push({
@@ -770,6 +851,8 @@ export async function bulkOptimizeMulti(
     ? results.reduce((s, r) => s + r.utilization_pct, 0) / results.length
     : 0
 
+  console.log(`[OPTIMIZE] Multi-product complete — ${results.length} orders, ${optimized} optimized, $${totalSavings.toFixed(2)} savings, ML: ${mlUsed ? 'YES' : 'NO'}`)
+
   return {
     results,
     invalidRows,
@@ -782,7 +865,7 @@ export async function bulkOptimizeMulti(
       no_fit: noFit,
       total_savings: parseFloat(totalSavings.toFixed(2)),
       avg_utilization: parseFloat(avgUtil.toFixed(1)),
-      ml_used: false,
+      ml_used: mlUsed,
     },
   }
 }
