@@ -1,29 +1,22 @@
 const AUTH_COOKIE_NAME = 'shipzi-auth'
 const ONBOARDING_COOKIE_NAME = 'shipzi-onboarding-complete'
 
-function getCookieFlags(): string {
-  if (typeof window === 'undefined') return ''
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  return `; path=/; SameSite=Lax${secure}`
-}
-
 export function setAuthCookie(uid: string): void {
-  if (typeof document === 'undefined') return
-  if (!uid || uid.length < 10) return
-  const flags = getCookieFlags()
-  document.cookie = `${AUTH_COOKIE_NAME}=${uid}; max-age=86400${flags}`
+  if (typeof document === 'undefined' || !uid) return
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${AUTH_COOKIE_NAME}=${uid}; path=/; max-age=86400; SameSite=Lax${secure}`
 }
 
 export function setOnboardingComplete(): void {
   if (typeof document === 'undefined') return
-  const flags = getCookieFlags()
-  document.cookie = `${ONBOARDING_COOKIE_NAME}=true; max-age=31536000${flags}`
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${ONBOARDING_COOKIE_NAME}=true; path=/; max-age=31536000; SameSite=Lax${secure}`
 }
 
 export function clearAuthCookies(): void {
   if (typeof document === 'undefined') return
-  document.cookie = `${AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`
-  document.cookie = `${ONBOARDING_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`
+  document.cookie = `${AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  document.cookie = `${ONBOARDING_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
 }
 
 export function getAuthCookie(): string | null {
