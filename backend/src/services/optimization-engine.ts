@@ -306,7 +306,7 @@ export function selectOptimalBox(
     reason = `Current box is already optimal. Tolerance match with ${bestBoxDims}cm (${bestBoxVol}cm³). No meaningful size reduction possible for ${product.product_name}.`
   }
 
-  let finalBoxId = best.box.id
+  let finalBoxId: string | null = best.box.id
   let finalBoxName = best.box.box_name
   let finalBoxDims = bestBoxDims
   let finalPrice = parseFloat(best.box.cost_per_box_usd.toFixed(2))
@@ -316,7 +316,18 @@ export function selectOptimalBox(
   let aiExplanation = undefined
   let mlConfidence = undefined
 
+  // When same_box, always show original used box dimensions
+  if (fitStatus === 'same_box') {
+    finalBoxDims = originalBoxDims
+    finalPrice = product.used_box_price
+    finalBoxId = null
+    finalBoxName = 'Same Box'
+  }
+
   if (mlResult && mlResult.recommended_box_name) {
+    // Always track ML confidence when ML was used
+    mlConfidence = mlResult.ml_confidence_pct
+
     if (mlResult.recommended_box_name !== best.box.box_name) {
       if (mlResult.savings_usd > finalSavings) {
         // ML found a better box that exists in catalog? We should find it.
@@ -334,7 +345,6 @@ export function selectOptimalBox(
     } else {
       // both agree
       mlEnhanced = true
-      mlConfidence = mlResult.ml_confidence_pct
     }
   }
 
@@ -653,29 +663,30 @@ export function selectOptimalBoxMultiProduct(
     const newTotalCost = bestFit.box.cost_per_box_usd + shipping
     const originalTotalCost = usedBoxPrice + originalShipping
 
+    // Same box: show original used box dimensions
     return {
       row_index: 0,
       product_name: `${orderId} (${productCount} products)`,
       original_box_dimensions: originalBoxDims,
       original_box_price: usedBoxPrice,
-      optimized_box_dimensions: `${bestFit.box.length_cm}×${bestFit.box.width_cm}×${bestFit.box.height_cm}`,
-      optimized_box_price: bestFit.box.cost_per_box_usd,
-      recommended_box_id: bestFit.box.id,
-      recommended_box_name: bestFit.box.box_name,
+      optimized_box_dimensions: originalBoxDims,
+      optimized_box_price: usedBoxPrice,
+      recommended_box_id: null,
+      recommended_box_name: 'Same Box',
       shipping_zone: shippingZone,
-      savings: parseFloat((originalTotalCost - newTotalCost).toFixed(2)),
+      savings: 0,
       fit_status: 'same_box',
       optimization_reason: `Current box is already the best fit for ${productCount} products.`,
       utilization_pct: parseFloat(bestFit.utilization.toFixed(1)),
-      dimensional_weight_kg: dimWeight,
-      sustainability_score: bestFit.box.sustainability_score,
+      dimensional_weight_kg: originalDimWeight,
+      sustainability_score: 0,
       parsed_product: {
         product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
         product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
         used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
         shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
       },
-      recommended_box: bestFit.box,
+      recommended_box: null,
     }
   }
 
