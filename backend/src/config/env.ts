@@ -31,7 +31,8 @@ function validateEnv(): void {
     throw new Error('JWT_SECRET must be at least 32 characters');
   }
   // Warn about weak secrets in development
-  if (CONFIG.NODE_ENV === 'development' && process.env.JWT_SECRET?.length < 64) {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (CONFIG.NODE_ENV === 'development' && jwtSecret && jwtSecret.length < 64) {
     console.warn('[SECURITY] JWT_SECRET is weak for development. Use 64+ characters.');
   }
 }
