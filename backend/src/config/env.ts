@@ -32,7 +32,7 @@ function validateEnv(): void {
   }
   // Warn about weak secrets in development
   const jwtSecret = process.env.JWT_SECRET;
-  if (CONFIG.NODE_ENV === 'development' && jwtSecret && jwtSecret.length < 64) {
+  if ((process.env.NODE_ENV || 'development') === 'development' && jwtSecret && jwtSecret.length < 64) {
     console.warn('[SECURITY] JWT_SECRET is weak for development. Use 64+ characters.');
   }
 }
