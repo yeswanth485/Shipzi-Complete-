@@ -232,32 +232,21 @@ export function selectOptimalBox(
     }
   }
 
-  // FIX 2: Scoring with normalized cost — utilization 55% + cost 30% + eco 15%
-  // Pre-compute min and max total costs for normalization
-  const allCosts = smallerFittingBoxes.map(b => {
-    const dw = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
-    return b.cost_per_box_usd + calcShippingCost(dw, product.weight_kg * product.quantity, product.shipping_zone)
-  })
-  const minCost = Math.min(...allCosts)
-  const maxCost = Math.max(...allCosts)
-  const costRange = maxCost - minCost || 1
-
+  // Score: prioritize SMALLEST box that fits, then cheapest, then eco-friendly
   const scored = smallerFittingBoxes.map(box => {
     const boxVol      = box.length_cm * box.width_cm * box.height_cm
     const utilization = Math.min((productVol / boxVol) * 100, 100)
     const dimWeight   = calcDimWeight(box.length_cm, box.width_cm, box.height_cm)
     const shippingCost = calcShippingCost(dimWeight, product.weight_kg * product.quantity, product.shipping_zone)
     const totalCost   = box.cost_per_box_usd + shippingCost
-    // Normalized cost score: 0 = most expensive, 100 = cheapest
-    const costScore   = ((maxCost - totalCost) / costRange) * 100
-    // Composite: utilization 55% + cost 30% + eco 15%
-    const score = (utilization * 0.55) + (costScore * 0.30) + (box.sustainability_score * 0.15)
-    return { box, utilization, dimWeight, shippingCost, totalCost, score }
+    return { box, utilization, dimWeight, shippingCost, totalCost, boxVol }
   }).sort((a, b) => {
-    // FIX 8: Primary: composite score desc; tiebreaker: smaller volume asc
-    if (Math.abs(b.score - a.score) > 0.1) return b.score - a.score
-    return (a.box.length_cm * a.box.width_cm * a.box.height_cm) -
-           (b.box.length_cm * b.box.width_cm * b.box.height_cm)
+    // Primary: smallest box volume (this is the key optimization goal)
+    if (Math.abs(a.boxVol - b.boxVol) > 1) return a.boxVol - b.boxVol
+    // Secondary: lowest total cost (box + shipping)
+    if (Math.abs(a.totalCost - b.totalCost) > 0.01) return a.totalCost - b.totalCost
+    // Tertiary: higher sustainability score
+    return b.box.sustainability_score - a.box.sustainability_score
   })
 
   const best = scored[0]
@@ -774,29 +763,21 @@ export function selectOptimalBoxMultiProduct(
     }
   }
 
-  // Score smaller boxes: cost 60% + utilization 40%
-  const allCosts = smallerFittingBoxes.map(b => {
-    const dw = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
-    const ship = calcShippingCost(dw, minWeight, shippingZone)
-    return b.cost_per_box_usd + ship
-  })
-  const minCost = Math.min(...allCosts)
-  const maxCost = Math.max(...allCosts)
-  const costRange = maxCost - minCost || 1
-
+  // Score: prioritize SMALLEST box that fits, then cheapest, then eco-friendly
   const scored = smallerFittingBoxes.map(box => {
     const boxVol = box.length_cm * box.width_cm * box.height_cm
     const utilization = Math.min((packing.length * packing.width * packing.height / boxVol) * 100, 100)
     const dw = calcDimWeight(box.length_cm, box.width_cm, box.height_cm)
     const ship = calcShippingCost(dw, minWeight, shippingZone)
     const totalCost = box.cost_per_box_usd + ship
-    const costScore = ((maxCost - totalCost) / costRange) * 100
-    const score = (costScore * 0.60) + (utilization * 0.40)
-    return { box, utilization, totalCost, score }
+    return { box, utilization, totalCost, boxVol }
   }).sort((a, b) => {
-    if (Math.abs(b.score - a.score) > 0.1) return b.score - a.score
-    return (a.box.length_cm * a.box.width_cm * a.box.height_cm) -
-           (b.box.length_cm * b.box.width_cm * b.box.height_cm)
+    // Primary: smallest box volume (key optimization goal)
+    if (Math.abs(a.boxVol - b.boxVol) > 1) return a.boxVol - b.boxVol
+    // Secondary: lowest total cost
+    if (Math.abs(a.totalCost - b.totalCost) > 0.01) return a.totalCost - b.totalCost
+    // Tertiary: higher sustainability score
+    return b.box.sustainability_score - a.box.sustainability_score
   })
 
   const best = scored[0]

@@ -165,6 +165,12 @@ export default function BoxCatalogPage() {
     { box_name: 'Premium Rigid Display Box', length_cm: 30, width_cm: 20, height_cm: 20, max_weight_kg: 6, material_type: 'rigid', cost_per_box_usd: 6.50, sustainability_score: 45 },
     { box_name: 'Rigid Jewelry Box', length_cm: 12, width_cm: 10, height_cm: 5, max_weight_kg: 1, material_type: 'rigid', cost_per_box_usd: 2.20, sustainability_score: 50 },
     { box_name: 'XL Rigid Presentation Box', length_cm: 45, width_cm: 35, height_cm: 20, max_weight_kg: 12, material_type: 'rigid', cost_per_box_usd: 8.50, sustainability_score: 42 },
+    // ── NEW: Small-size boxes to fill the gap (8-15cm range) ──
+    { box_name: 'Tiny Corrugated Box', length_cm: 10, width_cm: 8, height_cm: 6, max_weight_kg: 1, material_type: 'corrugated', cost_per_box_usd: 0.30, sustainability_score: 82 },
+    { box_name: 'Small Cube Mailer', length_cm: 12, width_cm: 10, height_cm: 10, max_weight_kg: 2, material_type: 'corrugated', cost_per_box_usd: 0.42, sustainability_score: 78 },
+    { box_name: 'Compact Kraft Box', length_cm: 14, width_cm: 10, height_cm: 10, max_weight_kg: 2, material_type: 'kraft', cost_per_box_usd: 0.48, sustainability_score: 86 },
+    { box_name: 'Small Kraft Cube', length_cm: 12, width_cm: 12, height_cm: 10, max_weight_kg: 2, material_type: 'kraft', cost_per_box_usd: 0.50, sustainability_score: 87 },
+    { box_name: 'Mini Rigid Cube', length_cm: 10, width_cm: 10, height_cm: 10, max_weight_kg: 1.5, material_type: 'rigid', cost_per_box_usd: 1.90, sustainability_score: 53 },
   ]
 
   const fetchBoxes = async () => {
