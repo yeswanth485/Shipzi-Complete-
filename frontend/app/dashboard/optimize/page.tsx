@@ -268,13 +268,13 @@ export default function OptimizePage() {
 
       for (let i = 0; i < rawRows.length; i += CHUNK_SIZE) {
         const chunk = rawRows.slice(i, i + CHUNK_SIZE);
-      const token = await firebaseUser?.getIdToken()
-      const response = await fetchWithRetry(`/api/optimize/bulk`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
+        const token = await firebaseUser?.getIdToken()
+        const response = await fetchWithRetry(`/api/optimize/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             rows: chunk,
             mode: uploadMode,
@@ -284,7 +284,10 @@ export default function OptimizePage() {
           }),
         }, 3, 5000);
 
-        if (!response.ok) throw new Error(`Batch optimization failed at row ${i}`);
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}))
+          throw new Error(errData.message || errData.error || `Batch optimization failed at row ${i}`);
+        }
         const data = await response.json();
         allResults.push(...data.results);
         totalSavings += data.summary.total_savings;

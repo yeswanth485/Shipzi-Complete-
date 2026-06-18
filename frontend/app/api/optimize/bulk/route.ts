@@ -38,8 +38,10 @@ export async function POST(req: Request) {
     const data = await backendRes.json()
 
     if (!backendRes.ok) {
+      const errorMsg = data.error || data.message || 'Backend optimization failed'
+      console.error(`[PROXY] Backend returned ${backendRes.status}: ${errorMsg}`)
       return NextResponse.json(
-        { message: data.error || 'Backend optimization failed' },
+        { message: errorMsg },
         { status: backendRes.status }
       )
     }

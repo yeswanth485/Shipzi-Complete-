@@ -53,7 +53,11 @@ app.get('/health', async (_req, res) => {
   let mlBridgeStatus = 'unknown'
   try {
     const mlUrl = process.env.ML_BRIDGE_URL || process.env.NEXT_PUBLIC_ML_BRIDGE_URL || 'https://shipzi-complete-ml-engine.onrender.com'
-    const mlRes = await fetch(`${mlUrl}/ml/health`, { signal: AbortSignal.timeout(3000) })
+    const mlHeaders: Record<string, string> = {}
+    if (process.env.ML_API_KEY) {
+      mlHeaders['Authorization'] = `Bearer ${process.env.ML_API_KEY}`
+    }
+    const mlRes = await fetch(`${mlUrl}/ml/health`, { headers: mlHeaders, signal: AbortSignal.timeout(3000) })
     if (mlRes.ok) {
       const mlData = await mlRes.json()
       mlBridgeStatus = mlData.status || 'healthy'

@@ -39,7 +39,11 @@ export async function checkMLBridge(): Promise<boolean> {
   if (!isMLEnabled()) return false
   const url = getMLBridgeUrl()
   try {
-    const res = await fetch(`${url}/ml/health`, { signal: AbortSignal.timeout(2000) })
+    const headers: Record<string, string> = {}
+    if (process.env.ML_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.ML_API_KEY}`
+    }
+    const res = await fetch(`${url}/ml/health`, { headers, signal: AbortSignal.timeout(2000) })
     if (res.ok) {
       console.log('ML bridge connected ✅')
       return true
@@ -55,9 +59,13 @@ export async function mlEnhance(product: ParsedProduct): Promise<MLEnhancement |
   if (!isMLEnabled()) return null
   const url = getMLBridgeUrl()
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (process.env.ML_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.ML_API_KEY}`
+    }
     const res = await fetch(`${url}/ml/single`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(product),
       signal: AbortSignal.timeout(2000)
     })
@@ -407,10 +415,13 @@ export async function bulkOptimize(
     if (mlEnabled && validRows.length > 0) {
       try {
         console.log(`[ML] Calling ML bridge at ${mlUrl}/ml/bulk for ${validRows.length} rows...`)
-        console.log(`[ML] Runtime env: ML_BRIDGE_URL=${process.env.ML_BRIDGE_URL}, NEXT_PUBLIC_ML_BRIDGE_URL=${process.env.NEXT_PUBLIC_ML_BRIDGE_URL}`)
+        const mlHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (process.env.ML_API_KEY) {
+          mlHeaders['Authorization'] = `Bearer ${process.env.ML_API_KEY}`
+        }
         const res = await fetch(`${mlUrl}/ml/bulk`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: mlHeaders,
           body: JSON.stringify(validRows),
           signal: AbortSignal.timeout(15000)
         })

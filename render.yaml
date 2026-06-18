@@ -38,6 +38,14 @@ services:
         sync: false
       - key: FIREBASE_PRIVATE_KEY
         sync: false
+      - key: ML_API_KEY
+        sync: false
+      - key: ML_BRIDGE_URL
+        sync: false
+      - key: NEXT_PUBLIC_ML_BRIDGE_URL
+        sync: false
+      - key: NEXT_PUBLIC_ML_BRIDGE_ENABLED
+        value: "true"
   - type: web
     name: shipzi-ml-engine
     runtime: docker
@@ -52,14 +60,4 @@ services:
       - key: ML_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: FIREBASE_PROJECT_ID
-        sync: false
-      - key: FIREBASE_CLIENT_EMAIL
-        sync: false
-      - key: FIREBASE_PRIVATE_KEY
         sync: false
