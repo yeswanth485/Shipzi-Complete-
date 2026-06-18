@@ -579,6 +579,88 @@ function computeCombinedDimensions(products: ProductSpec[]) {
   return { combinedLength, combinedWidth, combinedHeight, maxFragility, productCount: products.length, productNames }
 }
 
+// Try multiple packing strategies and return the best fitting dimensions
+function computeBestPacking(products: ProductSpec[]): {
+  length: number; width: number; height: number; strategy: string
+} {
+  if (products.length === 1) {
+    return { length: products[0].length, width: products[0].width, height: products[0].height, strategy: 'single' }
+  }
+
+  const strategies: Array<{ length: number; width: number; height: number; strategy: string }> = []
+
+  // Strategy 1: Max of each dimension (side-by-side, worst case)
+  strategies.push({
+    length: Math.max(...products.map(p => p.length)),
+    width: Math.max(...products.map(p => p.width)),
+    height: Math.max(...products.map(p => p.height)),
+    strategy: 'side_by_side',
+  })
+
+  // Strategy 2: Stack vertically (max L/W, sum of heights)
+  strategies.push({
+    length: Math.max(...products.map(p => p.length)),
+    width: Math.max(...products.map(p => p.width)),
+    height: products.reduce((sum, p) => sum + p.height, 0),
+    strategy: 'stack_vertical',
+  })
+
+  // Strategy 3: Stack along width (max L/H, sum of widths)
+  strategies.push({
+    length: Math.max(...products.map(p => p.length)),
+    width: products.reduce((sum, p) => sum + p.width, 0),
+    height: Math.max(...products.map(p => p.height)),
+    strategy: 'stack_width',
+  })
+
+  // Strategy 4: Stack along length (sum of lengths, max W/H)
+  strategies.push({
+    length: products.reduce((sum, p) => sum + p.length, 0),
+    width: Math.max(...products.map(p => p.width)),
+    height: Math.max(...products.map(p => p.height)),
+    strategy: 'stack_length',
+  })
+
+  // Strategy 5: 2x2 grid for 4 products (pair-wise max)
+  if (products.length === 4) {
+    const sorted = [...products].sort((a, b) => (b.length * b.width) - (a.length * a.width))
+    strategies.push({
+      length: Math.max(sorted[0].length, sorted[1].length) + Math.max(sorted[2].length, sorted[3].length),
+      width: Math.max(
+        Math.max(sorted[0].width, sorted[1].width),
+        Math.max(sorted[2].width, sorted[3].width)
+      ),
+      height: Math.max(...products.map(p => p.height)),
+      strategy: '2x2_grid',
+    })
+  }
+
+  // Strategy 6: Pairs stacked (for 3-4 products, pair two and stack)
+  if (products.length >= 3) {
+    const sorted = [...products].sort((a, b) => (b.length * b.width) - (a.length * a.width))
+    // Pair the two largest, stack the rest on top
+    const pairMaxL = Math.max(sorted[0].length, sorted[1].length)
+    const pairMaxW = Math.max(sorted[0].width, sorted[1].width)
+    const pairSumH = sorted[0].height + sorted[1].height
+    const restMaxL = products.length > 2 ? Math.max(...sorted.slice(2).map(p => p.length)) : 0
+    const restMaxW = products.length > 2 ? Math.max(...sorted.slice(2).map(p => p.width)) : 0
+    const restSumH = products.length > 2 ? sorted.slice(2).reduce((s, p) => s + p.height, 0) : 0
+    strategies.push({
+      length: Math.max(pairMaxL, restMaxL),
+      width: Math.max(pairMaxW, restMaxW),
+      height: pairSumH + restSumH,
+      strategy: 'paired_stack',
+    })
+  }
+
+  // Pick the strategy with the smallest volume
+  return strategies.reduce((best, s) => {
+    const vol = s.length * s.width * s.height
+    const bestVol = best.length * best.width * best.height
+    return vol < bestVol ? s : best
+  })
+}
+
 export function selectOptimalBoxMultiProduct(
   orderId: string,
   products: ProductSpec[],
@@ -588,20 +670,25 @@ export function selectOptimalBoxMultiProduct(
   usedBoxPrice: number,
   shippingZone: string,
   catalog: CatalogBox[],
+  mlResult?: MLEnhancement | null,
 ): OptimizationResult {
-  const { combinedLength, combinedWidth, combinedHeight, maxFragility, productCount, productNames } =
+  const { maxFragility, productCount, productNames } =
     computeCombinedDimensions(products)
 
+  // Use best packing strategy instead of just max-of-each
+  const packing = computeBestPacking(products)
+
   const pad = fragilityPadding(maxFragility)
-  const minL = combinedLength + pad
-  const minW = combinedWidth + pad
-  const minH = combinedHeight + pad
+  const minL = packing.length + pad
+  const minW = packing.width + pad
+  const minH = packing.height + pad
   const minWeight = products.length * 0.5
 
   const originalBoxDims = `${usedBoxLength}×${usedBoxWidth}×${usedBoxHeight}`
   const originalBoxVol = usedBoxLength * usedBoxWidth * usedBoxHeight
   const originalDimWeight = calcDimWeight(usedBoxLength, usedBoxWidth, usedBoxHeight)
   const originalShipping = calcShippingCost(originalDimWeight, minWeight, shippingZone)
+  const originalTotalCost = usedBoxPrice + originalShipping
 
   function boxFitsGroup(box: CatalogBox): boolean {
     const boxDims = [box.length_cm, box.width_cm, box.height_cm].sort((a, b) => b - a)
@@ -630,13 +717,13 @@ export function selectOptimalBoxMultiProduct(
       shipping_zone: shippingZone,
       savings: 0,
       fit_status: 'no_fit',
-      optimization_reason: `No box in catalog fits all ${productCount} products together (${productNames}). Combined: ${combinedLength}×${combinedWidth}×${combinedHeight}cm.`,
+      optimization_reason: `No box in catalog fits all ${productCount} products together (${productNames}). Combined: ${minL.toFixed(1)}×${minW.toFixed(1)}×${minH.toFixed(1)}cm (packing: ${packing.strategy}).`,
       utilization_pct: 0,
       dimensional_weight_kg: originalDimWeight,
       sustainability_score: 0,
       parsed_product: {
-        product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
-        product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+        product_name: orderId, product_length: packing.length, product_width: packing.width,
+        product_height: packing.height, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
         used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
         shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
       },
@@ -653,15 +740,10 @@ export function selectOptimalBoxMultiProduct(
     const bestFit = fittingBoxes
       .map(b => {
         const boxVol = b.length_cm * b.width_cm * b.height_cm
-        const utilization = (combinedLength * combinedWidth * combinedHeight / boxVol) * 100
+        const utilization = (packing.length * packing.width * packing.height / boxVol) * 100
         return { box: b, utilization }
       })
       .sort((a, b) => b.utilization - a.utilization)[0]
-
-    const dimWeight = calcDimWeight(bestFit.box.length_cm, bestFit.box.width_cm, bestFit.box.height_cm)
-    const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
-    const newTotalCost = bestFit.box.cost_per_box_usd + shipping
-    const originalTotalCost = usedBoxPrice + originalShipping
 
     // Same box: show original used box dimensions
     return {
@@ -676,13 +758,15 @@ export function selectOptimalBoxMultiProduct(
       shipping_zone: shippingZone,
       savings: 0,
       fit_status: 'same_box',
-      optimization_reason: `Current box is already the best fit for ${productCount} products.`,
+      optimization_reason: `Current box is already the best fit for ${productCount} products (packing: ${packing.strategy}).`,
       utilization_pct: parseFloat(bestFit.utilization.toFixed(1)),
       dimensional_weight_kg: originalDimWeight,
       sustainability_score: 0,
+      ml_confidence_pct: mlResult?.ml_confidence_pct,
+      ml_enhanced: !!mlResult,
       parsed_product: {
-        product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
-        product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+        product_name: orderId, product_length: packing.length, product_width: packing.width,
+        product_height: packing.height, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
         used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
         shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
       },
@@ -690,45 +774,147 @@ export function selectOptimalBoxMultiProduct(
     }
   }
 
-  const bestBox = smallerFittingBoxes
-    .map(b => {
-      const boxVol = b.length_cm * b.width_cm * b.height_cm
-      const utilization = (combinedLength * combinedWidth * combinedHeight / boxVol) * 100
-      const dimWeight = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
-      const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
-      const totalCost = b.cost_per_box_usd + shipping
-      return { box: b, utilization, totalCost }
-    })
-    .sort((a, b) => a.totalCost - b.totalCost)[0]
+  // Score smaller boxes: cost 60% + utilization 40%
+  const allCosts = smallerFittingBoxes.map(b => {
+    const dw = calcDimWeight(b.length_cm, b.width_cm, b.height_cm)
+    const ship = calcShippingCost(dw, minWeight, shippingZone)
+    return b.cost_per_box_usd + ship
+  })
+  const minCost = Math.min(...allCosts)
+  const maxCost = Math.max(...allCosts)
+  const costRange = maxCost - minCost || 1
 
-  const dimWeight = calcDimWeight(bestBox.box.length_cm, bestBox.box.width_cm, bestBox.box.height_cm)
-  const shipping = calcShippingCost(dimWeight, minWeight, shippingZone)
-  const newTotalCost = bestBox.box.cost_per_box_usd + shipping
-  const originalTotalCost = usedBoxPrice + originalShipping
+  const scored = smallerFittingBoxes.map(box => {
+    const boxVol = box.length_cm * box.width_cm * box.height_cm
+    const utilization = Math.min((packing.length * packing.width * packing.height / boxVol) * 100, 100)
+    const dw = calcDimWeight(box.length_cm, box.width_cm, box.height_cm)
+    const ship = calcShippingCost(dw, minWeight, shippingZone)
+    const totalCost = box.cost_per_box_usd + ship
+    const costScore = ((maxCost - totalCost) / costRange) * 100
+    const score = (costScore * 0.60) + (utilization * 0.40)
+    return { box, utilization, totalCost, score }
+  }).sort((a, b) => {
+    if (Math.abs(b.score - a.score) > 0.1) return b.score - a.score
+    return (a.box.length_cm * a.box.width_cm * a.box.height_cm) -
+           (b.box.length_cm * b.box.width_cm * b.box.height_cm)
+  })
+
+  const best = scored[0]
+  const bestBoxVol = best.box.length_cm * best.box.width_cm * best.box.height_cm
+  const bestBoxDims = `${best.box.length_cm}×${best.box.width_cm}×${best.box.height_cm}`
+  const optimizedTotalCost = best.totalCost
+  const savings = parseFloat(Math.max(0, originalTotalCost - optimizedTotalCost).toFixed(2))
+
+  // Safety: optimized box MUST be smaller than original
+  if (bestBoxVol >= originalBoxVol) {
+    return {
+      row_index: 0,
+      product_name: `${orderId} (${productCount} products)`,
+      original_box_dimensions: originalBoxDims,
+      original_box_price: usedBoxPrice,
+      optimized_box_dimensions: originalBoxDims,
+      optimized_box_price: usedBoxPrice,
+      recommended_box_id: null,
+      recommended_box_name: 'Same Box',
+      shipping_zone: shippingZone,
+      savings: 0,
+      fit_status: 'same_box',
+      optimization_reason: `No smaller box available. Current box is optimal (packing: ${packing.strategy}).`,
+      utilization_pct: 0,
+      dimensional_weight_kg: originalDimWeight,
+      sustainability_score: 0,
+      ml_confidence_pct: mlResult?.ml_confidence_pct,
+      ml_enhanced: !!mlResult,
+      parsed_product: {
+        product_name: orderId, product_length: packing.length, product_width: packing.width,
+        product_height: packing.height, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+        used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
+        shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
+      },
+      recommended_box: null,
+    }
+  }
+
+  const TOLERANCE = 0.1
+  const isSameBox =
+    Math.abs(best.box.length_cm - usedBoxLength) < TOLERANCE &&
+    Math.abs(best.box.width_cm  - usedBoxWidth)  < TOLERANCE &&
+    Math.abs(best.box.height_cm - usedBoxHeight) < TOLERANCE
+
+  const fitStatus: FitStatus = isSameBox ? 'same_box' : 'optimized'
+
+  const volReductionPct = Math.round((1 - bestBoxVol / originalBoxVol) * 100)
+  let reason: string
+  if (fitStatus === 'optimized') {
+    reason = `Switched from ${originalBoxDims}cm (${originalBoxVol}cm³) to ${bestBoxDims}cm (${bestBoxVol}cm³) — ${volReductionPct}% smaller volume, saving $${savings.toFixed(2)} per order (box $${usedBoxPrice.toFixed(2)}→$${best.box.cost_per_box_usd.toFixed(2)} + shipping). Packing: ${packing.strategy}.`
+  } else {
+    reason = `Current box is already optimal. Tolerance match with ${bestBoxDims}cm. No meaningful size reduction for ${productCount} products (packing: ${packing.strategy}).`
+  }
+
+  let finalBoxId: string | null = best.box.id
+  let finalBoxName = best.box.box_name
+  let finalBoxDims = bestBoxDims
+  let finalPrice = parseFloat(best.box.cost_per_box_usd.toFixed(2))
+  let finalSavings = fitStatus === 'same_box' ? 0 : savings
+  let mlEnhanced = false
+  let mlConfidence = mlResult?.ml_confidence_pct
+
+  // When same_box, always show original used box dimensions
+  if (fitStatus === 'same_box') {
+    finalBoxDims = originalBoxDims
+    finalPrice = usedBoxPrice
+    finalBoxId = null
+    finalBoxName = 'Same Box'
+  }
+
+  // Apply ML enhancement
+  if (mlResult && mlResult.recommended_box_name) {
+    if (mlResult.recommended_box_name !== best.box.box_name) {
+      if (mlResult.savings_usd > finalSavings) {
+        const mlBox = catalog.find(b => b.box_name === mlResult.recommended_box_name)
+        if (mlBox) {
+          const mlBoxVol = mlBox.length_cm * mlBox.width_cm * mlBox.height_cm
+          if (mlBoxVol < originalBoxVol) {
+            finalBoxId = mlBox.id
+            finalBoxName = mlBox.box_name
+            finalBoxDims = `${mlBox.length_cm}×${mlBox.width_cm}×${mlBox.height_cm}`
+            finalPrice = parseFloat(mlBox.cost_per_box_usd.toFixed(2))
+            finalSavings = mlResult.savings_usd
+            mlEnhanced = true
+          }
+        }
+      }
+    } else {
+      mlEnhanced = true
+    }
+  }
 
   return {
     row_index: 0,
     product_name: `${orderId} (${productCount} products)`,
     original_box_dimensions: originalBoxDims,
     original_box_price: usedBoxPrice,
-    optimized_box_dimensions: `${bestBox.box.length_cm}×${bestBox.box.width_cm}×${bestBox.box.height_cm}`,
-    optimized_box_price: bestBox.box.cost_per_box_usd,
-    recommended_box_id: bestBox.box.id,
-    recommended_box_name: bestBox.box.box_name,
+    optimized_box_dimensions: finalBoxDims,
+    optimized_box_price: finalPrice,
+    recommended_box_id: finalBoxId,
+    recommended_box_name: finalBoxName,
     shipping_zone: shippingZone,
-    savings: parseFloat((originalTotalCost - newTotalCost).toFixed(2)),
-    fit_status: 'optimized',
-    optimization_reason: `Optimized from ${originalBoxDims} to ${bestBox.box.box_name} for ${productCount} products — saves $${(originalTotalCost - newTotalCost).toFixed(2)}.`,
-    utilization_pct: parseFloat(bestBox.utilization.toFixed(1)),
-    dimensional_weight_kg: dimWeight,
-    sustainability_score: bestBox.box.sustainability_score,
+    savings: finalSavings,
+    fit_status: fitStatus,
+    optimization_reason: reason,
+    utilization_pct: parseFloat(best.utilization.toFixed(1)),
+    dimensional_weight_kg: calcDimWeight(best.box.length_cm, best.box.width_cm, best.box.height_cm),
+    sustainability_score: best.box.sustainability_score,
+    ml_confidence_pct: mlConfidence,
+    ml_recommended_box: mlResult?.recommended_box_name,
+    ml_enhanced: mlEnhanced,
     parsed_product: {
-      product_name: orderId, product_length: combinedLength, product_width: combinedWidth,
-      product_height: combinedHeight, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
+      product_name: orderId, product_length: packing.length, product_width: packing.width,
+      product_height: packing.height, used_box_length: usedBoxLength, used_box_width: usedBoxWidth,
       used_box_height: usedBoxHeight, fragility_score: maxFragility, used_box_price: usedBoxPrice,
       shipping_zone: shippingZone, quantity: 1, weight_kg: minWeight, row_index: 0,
     },
-    recommended_box: bestBox.box,
+    recommended_box: best.box,
   }
 }
 
@@ -811,7 +997,7 @@ export async function bulkOptimizeMulti(
     }
   }
 
-  // Process each order with optional ML enhancement
+  // Process each order with ML enhancement
   for (const { index: i, orderId, products, row } of parsedOrders) {
     try {
       const mlResult = mlResults[i] || null
@@ -824,24 +1010,8 @@ export async function bulkOptimizeMulti(
         parseFloat(row.used_box_price),
         row.shipping_zone,
         catalog,
+        mlResult,
       )
-
-      // Apply ML enhancement if available
-      if (mlResult && mlResult.recommended_box_name) {
-        const mlBox = catalog.find(b => b.box_name === mlResult.recommended_box_name)
-        if (mlBox) {
-          // Use ML-recommended box if it exists in catalog
-          const { combinedLength, combinedWidth, combinedHeight } = computeCombinedDimensions(products)
-          const pad = fragilityPadding(Math.max(...products.map(p => p.fragility)))
-          const boxDims = [mlBox.length_cm, mlBox.width_cm, mlBox.height_cm].sort((a, b) => b - a)
-          const prodDims = [combinedLength + pad, combinedWidth + pad, combinedHeight + pad].sort((a, b) => b - a)
-          if (boxDims[0] >= prodDims[0] && boxDims[1] >= prodDims[1] && boxDims[2] >= prodDims[2]) {
-            result.ml_confidence_pct = mlResult.ml_confidence_pct
-            result.ml_recommended_box = mlResult.recommended_box_name
-            result.ml_enhanced = true
-          }
-        }
-      }
 
       results.push(result)
     } catch (err) {
