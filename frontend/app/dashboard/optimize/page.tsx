@@ -268,9 +268,13 @@ export default function OptimizePage() {
 
       for (let i = 0; i < rawRows.length; i += CHUNK_SIZE) {
         const chunk = rawRows.slice(i, i + CHUNK_SIZE);
-        const response = await fetchWithRetry(`/api/optimize/bulk`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      const token = await firebaseUser?.getIdToken()
+      const response = await fetchWithRetry(`/api/optimize/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
           body: JSON.stringify({
             rows: chunk,
             mode: uploadMode,

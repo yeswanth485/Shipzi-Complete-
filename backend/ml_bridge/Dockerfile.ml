@@ -5,5 +5,7 @@ RUN pip install -r requirements.txt
 COPY *.pkl ./
 COPY ml_bridge.py .
 ENV PORT=5001
+ENV ML_API_KEY=""
+ENV ALLOWED_ORIGINS=""
 EXPOSE $PORT
 CMD gunicorn ml_bridge:app --workers 2 --bind 0.0.0.0:$PORT --timeout 120

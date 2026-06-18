@@ -10,12 +10,26 @@ dotenv.config();
 
 const app = express();
 
-// CORS: Allow all origins — frontend can be on any Vercel/Netlify/localhost URL
+// CORS: Restrict to allowed origins only
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : [
+      process.env.FRONTEND_URL,
+      'https://shipzi.vercel.app',
+      'http://localhost:3000',
+    ].filter(Boolean);
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // ── Supabase client ─────────────────────────────────────────────
 // Use SERVICE_ROLE key when available (has write access).
@@ -29,7 +43,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!supabaseUrl || !supabaseKey) {
   console.error('FATAL: Supabase URL or Key is missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Render.');
 } else {
-  console.log(`Supabase client initialized — URL: ${supabaseUrl.slice(0, 30)}… Key: ${supabaseKey.slice(0, 8)}…`);
+  console.log('Supabase client initialized');
 }
 
 const supabase = createClient(supabaseUrl || '', supabaseKey || '');
@@ -71,8 +85,42 @@ app.get('/', (_req, res) => {
   })
 });
 
+// ── Firebase auth verification middleware ────────────────────────
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+
+if (!getApps().length) {
+  try {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+    });
+  } catch (e) {
+    console.error('Firebase admin init failed:', e);
+  }
+}
+
+async function verifyAuthToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decoded = await getAuth().verifyIdToken(token);
+    (req as any).userId = decoded.uid;
+    (req as any).userEmail = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // ── Main optimization endpoint ──────────────────────────────────
-app.post('/api/optimize', async (req, res) => {
+app.post('/api/optimize', verifyAuthToken, async (req, res) => {
   const startTime = Date.now();
   console.log(`\n[OPTIMIZE] Request received at ${new Date().toISOString()}`);
 
@@ -106,6 +154,21 @@ app.post('/api/optimize', async (req, res) => {
     }
     if (rawRows.length > 10000) {
       return res.status(400).json({ error: 'Maximum 10,000 rows per request' });
+    }
+
+    // ── Verify user owns this company ──────────────────────────
+    const userId = (req as any).userId;
+    const { data: userRecord, error: userLookupErr } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', userId)
+      .single();
+
+    if (userLookupErr || !userRecord) {
+      return res.status(403).json({ error: 'User not found' });
+    }
+    if (userRecord.company_id !== companyId) {
+      return res.status(403).json({ error: 'You do not have access to this company' });
     }
 
     console.log(`[OPTIMIZE] Company: ${companyId}, Run: ${runId}, Rows: ${rawRows.length}`);

@@ -19,7 +19,7 @@ export interface IPaymentRepository {
   findById(id: string): Promise<PaymentRecord | null>;
   findByOrderId(razorpay_order_id: string): Promise<PaymentRecord | null>;
   findByPaymentId(razorpay_payment_id: string): Promise<PaymentRecord | null>;
-  findByIdempotencyKey(key: string): Promise<PaymentRecord | null>;
+  findByIdempotencyKey(key: string, userId?: string): Promise<PaymentRecord | null>;
   updateStatus(id: string, status: string, extra?: Record<string, unknown>): Promise<PaymentRecord>;
   findByUserId(user_id: string, page: number, limit: number): Promise<{ data: PaymentRecord[]; total: number }>;
   markCaptured(id: string, razorpay_payment_id: string, signature: string, payment_method?: string): Promise<PaymentRecord>;

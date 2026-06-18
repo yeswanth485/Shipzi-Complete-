@@ -44,8 +44,8 @@ export const paymentService = {
     ip?: string,
     userAgent?: string
   ): Promise<CreateOrderResponse> {
-    // CHECK idempotency
-    const existing = await paymentRepository.findByIdempotencyKey(idempotencyKey);
+    // CHECK idempotency — bound to user to prevent cross-user replay
+    const existing = await paymentRepository.findByIdempotencyKey(idempotencyKey, userId);
     if (existing) {
       logger.info('Returning existing order for idempotency key', { idempotencyKey });
       return {

@@ -26,14 +26,19 @@ export const subscriptionService = {
       notes: { user_id: userId, plan_id: planId },
     });
 
-    // Store in DB
+    // Store in DB — sanitize Razorpay response to avoid storing sensitive internal data
+    const sanitizedMetadata = {
+      razorpay_subscription_id: subscription.id,
+      plan_id: planId,
+      status: subscription.status,
+    };
     const { data: record, error: insertError } = await supabase.from('subscriptions').insert({
       user_id: userId,
       razorpay_subscription_id: subscription.id,
       plan_id: planId,
       status: 'created',
       quantity: 1,
-      metadata: { razorpay_response: subscription },
+      metadata: sanitizedMetadata,
     }).select().single();
 
     if (insertError) throw new Error(`Database error: ${insertError.message}`);

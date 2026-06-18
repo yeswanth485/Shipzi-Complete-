@@ -36,9 +36,13 @@ export const paymentRepository = {
     return data as PaymentRecord;
   },
 
-  async findByIdempotencyKey(key: string): Promise<PaymentRecord | null> {
+  async findByIdempotencyKey(key: string, userId?: string): Promise<PaymentRecord | null> {
     logger.debug('Finding payment by idempotency key', { key });
-    const { data, error } = await supabase.from('payments').select('*').eq('idempotency_key', key).single();
+    let query = supabase.from('payments').select('*').eq('idempotency_key', key);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { data, error } = await query.single();
     if (error) return null;
     return data as PaymentRecord;
   },

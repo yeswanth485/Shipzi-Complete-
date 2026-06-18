@@ -60,7 +60,7 @@ export async function checkMLBridge(): Promise<{ connected: boolean; url: string
     const res = await fetchWithRetry(`${url}/ml/health`, { signal: AbortSignal.timeout(30000) }, 1, 3000)
     if (res.ok) {
       const data = await res.json()
-      console.log(`[ML] Bridge connected at ${url} — status: ${data.status}, models: ${data.models_loaded}`)
+      console.log(`[ML] Bridge connected — status: ${data.status}, models: ${data.models_loaded}`)
       return { connected: true, url, status: data.status || 'healthy' }
     }
     return { connected: false, url, status: `HTTP ${res.status}` }
@@ -88,8 +88,17 @@ export async function mlEnhance(product: ParsedProduct): Promise<MLEnhancement |
 }
 
 // ── CSV Row Validator ──────────────────────────────────────────────
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+
 export function validateCSVRow(raw: CSVRow, rowIndex: number): ValidationResult {
   const errors: string[] = []
+
+  // Guard against prototype pollution
+  for (const key of Object.keys(raw)) {
+    if (DANGEROUS_KEYS.includes(key)) {
+      return { valid: false, errors: [`Rejected: suspicious field "${key}"`], warnings: [], row: null }
+    }
+  }
 
   const pl = parseFloat(raw.product_length)
   const pw = parseFloat(raw.product_width)
@@ -695,7 +704,7 @@ export async function bulkOptimize(
     if (mlEnabled && validRows.length > 0) {
       try {
         console.log(`[ML] Calling ML bridge at ${mlUrl}/ml/bulk for ${validRows.length} rows...`)
-        console.log(`[ML] Runtime env: ML_BRIDGE_URL=${process.env.ML_BRIDGE_URL}, NEXT_PUBLIC_ML_BRIDGE_URL=${process.env.NEXT_PUBLIC_ML_BRIDGE_URL}`)
+        console.log('[ML] Runtime env: ML bridge configured')
         const res = await fetchWithRetry(`${mlUrl}/ml/bulk`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

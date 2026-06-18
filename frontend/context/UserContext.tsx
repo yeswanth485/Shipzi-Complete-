@@ -36,13 +36,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     // If the user row does not exist, insert a new one
     if (userErr && userErr.code === 'PGRST116') {
-      // Try to create a new user row with demo company id
+      // Create a new company for this user instead of using a shared demo company
+      const { data: newCompany, error: companyCreateErr } = await supabase
+        .from('companies')
+        .insert({ name: `${user.displayName || user.email || 'My Company'}'s Company` })
+        .select('id')
+        .single()
+
+      const companyId = newCompany?.id ?? null
+
       const newUser = {
         id: user.uid,
         email: user.email || '',
         full_name: user.displayName || '',
         avatar_url: user.photoURL || '',
-        company_id: '00000000-0000-0000-0000-000000000001', // Default to demo company
+        company_id: companyId,
         onboarding_complete: false,
         role: 'member',
       }

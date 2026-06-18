@@ -1,4 +1,4 @@
-// Safely load Razorpay checkout.js script.
+// Safely load Razorpay checkout.js script with Subresource Integrity.
 
 declare global {
   interface Window {

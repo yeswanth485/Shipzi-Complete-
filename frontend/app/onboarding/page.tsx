@@ -84,7 +84,20 @@ export default function OnboardingPage() {
     setSubmitError('')
     setLogoWarning('')
     try {
-      const ext = file.name.split('.').pop() ?? 'png'
+      // Validate file type and size
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml']
+      const maxSize = 5 * 1024 * 1024 // 5MB
+      if (!allowedTypes.includes(file.type)) {
+        setLogoWarning('Only PNG, JPG, and SVG files are allowed.')
+        return
+      }
+      if (file.size > maxSize) {
+        setLogoWarning('File too large. Maximum size is 5MB.')
+        return
+      }
+      // Force safe extension based on MIME type
+      const extMap: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' }
+      const ext = extMap[file.type] ?? 'png'
       const path = `${firebaseUser?.uid ?? 'anon'}/logo.${ext}`
       const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true })
       if (!error) {

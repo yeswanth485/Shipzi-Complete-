@@ -38,3 +38,28 @@ services:
         sync: false
       - key: FIREBASE_PRIVATE_KEY
         sync: false
+  - type: web
+    name: shipzi-ml-engine
+    runtime: docker
+    region: oregon
+    plan: free
+    autoDeploy: true
+    branch: main
+    dockerfilePath: ./backend/ml_bridge/Dockerfile.ml
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: ML_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false

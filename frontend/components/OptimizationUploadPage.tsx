@@ -16,7 +16,7 @@ interface ValidationResult {
 }
 
 export default function OptimizationUploadPage() {
-  const { companyId } = useUser()
+  const { companyId, firebaseUser } = useUser()
   const [mode, setMode] = useState<UploadMode>('single')
   const [file, setFile] = useState<File | null>(null)
   const [parsedRows, setParsedRows] = useState<CSVRow[]>([])
@@ -107,9 +107,13 @@ export default function OptimizationUploadPage() {
       }).select('id').single();
       const runId = runData.id;
 
+      const token = await firebaseUser?.getIdToken()
       const response = await fetch('/api/optimize/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           rows: parsedRows,
           mode,
