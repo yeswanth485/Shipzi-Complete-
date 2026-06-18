@@ -25,6 +25,22 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
   }
 
   const handlePaymentSuccess = async () => {
+    // Call activate endpoint as fallback (in case backend verify didn't activate it)
+    try {
+      const token = await (await import('@/lib/firebase')).auth.currentUser?.getIdToken()
+      if (token) {
+        await fetch('/api/subscription/activate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ plan_id: 'pro' }),
+        })
+      }
+    } catch (e) {
+      console.error('Post-payment activation fallback failed:', e)
+    }
     setShowPayment(false)
     onClose()
     await refreshSubscription()

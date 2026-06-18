@@ -1,7 +1,7 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
+import { auth } from '@/lib/firebase'
 
 interface SubscriptionData {
   plan: 'free' | 'growth' | 'enterprise'
@@ -50,6 +50,17 @@ export function useSubscription(): SubscriptionContextType {
   return ctx
 }
 
+async function getAuthToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const user = auth.currentUser
+    if (!user) return null
+    return await user.getIdToken()
+  } catch {
+    return null
+  }
+}
+
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { companyId, isLoading: isUserLoading } = useUser()
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
@@ -63,68 +74,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       return
     }
     try {
-      // Try to load existing subscription
-      const { data: sub, error: subErr } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('company_id', companyId)
-        .single()
+      const token = await getAuthToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-      if (subErr || !sub) {
-        // Count existing optimizations from optimization_runs before creating subscription
-        const { count } = await supabase
-          .from('optimization_runs')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .eq('status', 'complete')
+      const res = await fetch('/api/subscription', { headers })
+      const data = await res.json()
 
-        const existingUsage = count ?? 0
-
-        // Create default free subscription (preserve existing usage)
-        const { data: newSub } = await supabase
-          .from('subscriptions')
-          .insert({
-            company_id: companyId,
-            plan: 'free',
-            status: 'active',
-            current_usage: existingUsage,
-            monthly_shipment_limit: 100,
-          })
-          .select('*')
-          .single()
-
-        if (newSub) {
-          setSubscription({
-            ...newSub,
-            total_optimizations: existingUsage,
-            monthly_optimization_limit: FREE_LIMITS.monthly_optimizations,
-          })
-        } else {
-          setSubscription({
-            ...DEFAULT_SUB,
-            current_usage: existingUsage,
-            total_optimizations: existingUsage,
-          })
-        }
+      if (data.success && data.data) {
+        setSubscription(data.data)
       } else {
-        // Count actual optimizations from optimization_runs
-        const { count } = await supabase
-          .from('optimization_runs')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .eq('status', 'complete')
-
-        const totalOptimizations = count ?? sub.current_usage ?? 0
-
-        const isPro = sub.plan === 'growth' || sub.plan === 'enterprise'
-        setSubscription({
-          plan: sub.plan,
-          status: sub.status,
-          current_usage: totalOptimizations,
-          monthly_shipment_limit: sub.monthly_shipment_limit ?? 100,
-          total_optimizations: totalOptimizations,
-          monthly_optimization_limit: isPro ? 999999 : FREE_LIMITS.monthly_optimizations,
-        })
+        setSubscription(DEFAULT_SUB)
       }
     } catch (err) {
       console.error('Subscription fetch error:', err)
@@ -164,11 +124,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const recordOptimization = useCallback(async (rowCount: number) => {
     if (!companyId || !subscription) return
+    // Just update local state — the real count comes from optimization_runs
+    // which is counted by the backend subscription endpoint on every refresh
     const newTotal = subscription.total_optimizations + 1
-    await supabase
-      .from('subscriptions')
-      .update({ current_usage: newTotal })
-      .eq('company_id', companyId)
     setSubscription(prev => prev ? {
       ...prev,
       current_usage: newTotal,

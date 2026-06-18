@@ -173,9 +173,8 @@ export default function OnboardingPage() {
         if (userError) throw new Error(`User update failed: ${userError.message}`)
       }
 
-      // 3. Create subscription (ignore if already exists)
-      await supabase.from('subscriptions')
-        .insert({ company_id: companyId, plan: 'free', monthly_shipment_limit: 100 })
+      // 3. Subscription is auto-created by backend when user first loads the app
+      //    (no need to insert here — RLS blocks client-side inserts on subscriptions)
 
       // 4. Set cookie FIRST so middleware allows /dashboard, then redirect immediately
       setOnboardingComplete()
