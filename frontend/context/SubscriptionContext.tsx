@@ -71,14 +71,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .single()
 
       if (subErr || !sub) {
-        // Create default free subscription
+        // Count existing optimizations from optimization_runs before creating subscription
+        const { count } = await supabase
+          .from('optimization_runs')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId)
+          .eq('status', 'complete')
+
+        const existingUsage = count ?? 0
+
+        // Create default free subscription (preserve existing usage)
         const { data: newSub } = await supabase
           .from('subscriptions')
           .insert({
             company_id: companyId,
             plan: 'free',
             status: 'active',
-            current_usage: 0,
+            current_usage: existingUsage,
             monthly_shipment_limit: 100,
           })
           .select('*')
@@ -87,11 +96,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         if (newSub) {
           setSubscription({
             ...newSub,
-            total_optimizations: newSub.current_usage ?? 0,
+            total_optimizations: existingUsage,
             monthly_optimization_limit: FREE_LIMITS.monthly_optimizations,
           })
         } else {
-          setSubscription(DEFAULT_SUB)
+          setSubscription({
+            ...DEFAULT_SUB,
+            current_usage: existingUsage,
+            total_optimizations: existingUsage,
+          })
         }
       } else {
         // Count actual optimizations from optimization_runs

@@ -10,7 +10,9 @@ import {
   PaymentApiResponse,
 } from '../types/payment.types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5000';
+// Use local Next.js API routes (proxies to Express backend)
+// This avoids CORS and "Failed to fetch" on Vercel deployments
+const BASE_URL = '';
 
 import { auth } from '../lib/firebase';
 

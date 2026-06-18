@@ -1,0 +1,44 @@
+import { NextResponse } from 'next/server'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
+  || process.env.NEXT_PUBLIC_BACKEND_API_URL
+  || 'https://shipzi-payments.onrender.com'
+
+export async function POST(req: Request) {
+  try {
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Missing or invalid Authorization header' }, { status: 401 })
+    }
+
+    const body = await req.json()
+
+    const backendRes = await fetch(`${BACKEND_URL}/api/payment/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    const data = await backendRes.json()
+
+    if (!backendRes.ok) {
+      console.error(`[PAYMENT PROXY] Backend returned ${backendRes.status}:`, data.error || data.message)
+      return NextResponse.json(
+        { success: false, error: data.error || data.message || 'Payment verification failed' },
+        { status: backendRes.status }
+      )
+    }
+
+    return NextResponse.json(data)
+  } catch (error: any) {
+    console.error('Payment verify proxy failed:', error.message)
+    return NextResponse.json(
+      { success: false, error: error.message || 'Payment verification service unavailable' },
+      { status: 500 }
+    )
+  }
+}

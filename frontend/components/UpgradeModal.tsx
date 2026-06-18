@@ -18,7 +18,7 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
   const { refreshSubscription } = useSubscription()
   const { companyId } = useUser()
 
-  const isTestMode = process.env.NODE_ENV !== 'production'
+  const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === 'true'
 
   const handleUpgrade = () => {
     setShowPayment(true)

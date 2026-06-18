@@ -13,8 +13,8 @@ const PLAN_LIMITS: Record<string, { plan: string; monthly_shipment_limit: number
 }
 
 export async function POST(req: Request) {
-  // Only allow in dev or when explicitly enabled
-  const isEnabled = process.env.NODE_ENV !== 'production' || process.env.TEST_UPGRADE_ENABLED === 'true'
+  // Only allow when explicitly enabled via NEXT_PUBLIC_TEST_MODE
+  const isEnabled = process.env.NEXT_PUBLIC_TEST_MODE === 'true' || process.env.TEST_UPGRADE_ENABLED === 'true'
   if (!isEnabled) {
     return NextResponse.json({ error: 'Test upgrade is only available in development mode' }, { status: 403 })
   }
