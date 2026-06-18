@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// SECURITY NOTE: This middleware provides UX-only route protection (redirects).
+// It does NOT enforce real authentication. Actual auth is enforced server-side
+// via Firebase ID token verification in the backend API. Do NOT rely on this
+// middleware for security-critical access control.
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const authCookie = request.cookies.get('shipzi-auth')

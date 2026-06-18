@@ -86,18 +86,19 @@ export const paymentController = {
 
       if (!rawBody || !signature) {
         logger.warn('Webhook missing body or signature');
+        // Return 200 to prevent Razorpay from retrying on malformed requests
         res.status(200).json({ status: 'ok' });
         return;
       }
 
       await webhookService.processWebhook(rawBody, signature, req.body);
 
-      // Always return 200 to Razorpay
+      // Return 200 on success
       res.status(200).json({ status: 'ok' });
     } catch (error) {
       logger.error('Webhook handler error', { error: (error as Error).message });
-      // Always return 200 to Razorpay even on error
-      res.status(200).json({ status: 'ok' });
+      // Return 500 on processing errors so Razorpay retries
+      res.status(500).json({ status: 'error' });
     }
   },
 

@@ -12,6 +12,7 @@ const requiredEnvVars = [
   'FIREBASE_PROJECT_ID',
   'FIREBASE_CLIENT_EMAIL',
   'FIREBASE_PRIVATE_KEY',
+  'JWT_SECRET',
 ] as const;
 
 function validateEnv(): void {
@@ -24,6 +25,12 @@ function validateEnv(): void {
   }
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+  // Additional production security checks
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
   }
 }
 
@@ -49,7 +56,7 @@ export const CONFIG = {
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET!,
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET!,
 
-  JWT_SECRET: process.env.JWT_SECRET || 'dev-secret',
+  JWT_SECRET: process.env.JWT_SECRET!,
   FRONTEND_URL: process.env.FRONTEND_URL!,
 
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID!,

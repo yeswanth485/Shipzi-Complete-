@@ -84,6 +84,8 @@ export function notFoundHandler(req: Request, res: Response): void {
   res.status(404).json({
     success: false,
     error: 'Not found',
-    message: `Route ${req.method} ${req.path} not found`,
+    message: CONFIG.NODE_ENV === 'development'
+      ? `Route ${req.method} ${req.path} not found`
+      : 'Route not found',
   });
 }

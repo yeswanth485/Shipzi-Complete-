@@ -25,13 +25,8 @@ app.use(
         return callback(null, true);
       }
 
-      // Allow any Vercel preview deployment (*.vercel.app)
-      if (/^https:\/\/.+\.vercel\.app$/.test(origin)) {
-        return callback(null, true);
-      }
-
-      // Allow localhost for development
-      if (/^http:\/\/localhost:\d+$/.test(origin)) {
+      // Allow localhost for development only
+      if (CONFIG.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
         return callback(null, true);
       }
 
@@ -53,7 +48,7 @@ app.use((req, res, next) => {
   if (req.path === '/api/payment/webhook') {
     next();
   } else {
-    express.json({ limit: '10mb' })(req, res, next);
+    express.json({ limit: '1mb' })(req, res, next);
   }
 });
 
