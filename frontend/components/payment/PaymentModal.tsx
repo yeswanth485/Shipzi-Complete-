@@ -52,9 +52,9 @@ export function PaymentModal({
   useEffect(() => {
     if (isSuccess && paymentId) {
       onSuccess(paymentId);
-      setTimeout(onClose, 2000);
+      // Don't auto-close here — parent handles closing after activation
     }
-  }, [isSuccess, paymentId, onSuccess, onClose]);
+  }, [isSuccess, paymentId, onSuccess]);
 
   if (!isOpen) return null;
 
