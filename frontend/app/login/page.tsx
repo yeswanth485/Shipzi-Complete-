@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -7,6 +7,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   updateProfile,
 } from 'firebase/auth'
@@ -103,7 +105,22 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     setLoading(true); setError('')
     try {
-      const result = await signInWithPopup(auth, new GoogleAuthProvider())
+      const provider = new GoogleAuthProvider()
+      let result
+      try {
+        result = await signInWithPopup(auth, provider)
+      } catch (popupErr: any) {
+        // If popup blocked or closed, fall back to redirect
+        if (
+          popupErr?.code === 'auth/popup-blocked' ||
+          popupErr?.code === 'auth/popup-closed-by-user' ||
+          popupErr?.code === 'auth/cancelled-popup-request'
+        ) {
+          await signInWithRedirect(auth, provider)
+          return // page will reload after redirect
+        }
+        throw popupErr
+      }
       const uid = result.user.uid
       const { data: existing } = await supabase
         .from('users')
@@ -114,11 +131,28 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('Google sign-in error:', err)
       const msg = err.message || 'Unknown error occurred'
-      setError(`Google sign-in failed: ${msg}`)
+      setError(`Google sign-in failed. Please try again or use email sign-in.`)
     } finally {
       setLoading(false)
     }
   }
+
+  // Handle redirect result on page load
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        const uid = result.user.uid
+        const { data: existing } = await supabase
+          .from('users')
+          .select('id, onboarding_complete')
+          .eq('id', uid)
+          .single()
+        await handlePostAuth(uid, !existing)
+      }
+    }).catch((err) => {
+      console.error('Redirect result error:', err)
+    })
+  }, [])
 
   return (
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>

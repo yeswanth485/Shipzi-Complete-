@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+import { createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import { setAuthCookie } from '@/lib/auth-cookies'
@@ -70,7 +70,21 @@ export default function SignupPage() {
   const handleGoogle = async () => {
     setLoading(true); setServerError('')
     try {
-      const result = await signInWithPopup(auth, new GoogleAuthProvider())
+      const provider = new GoogleAuthProvider()
+      let result
+      try {
+        result = await signInWithPopup(auth, provider)
+      } catch (popupErr: any) {
+        if (
+          popupErr?.code === 'auth/popup-blocked' ||
+          popupErr?.code === 'auth/popup-closed-by-user' ||
+          popupErr?.code === 'auth/cancelled-popup-request'
+        ) {
+          await signInWithRedirect(auth, provider)
+          return
+        }
+        throw popupErr
+      }
       const uid = result.user.uid
       const { data: existing } = await supabase
         .from('users')
@@ -90,12 +104,38 @@ export default function SignupPage() {
       router.push('/onboarding')
     } catch (err: any) {
       console.error('Google sign-up error:', err)
-      const msg = err.message || 'Unknown error occurred'
-      setServerError(`Google sign-up failed: ${msg}`)
+      setServerError('Google sign-up failed. Please try again or use email sign-up.')
     } finally {
       setLoading(false)
     }
   }
+
+  // Handle redirect result on page load
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        const uid = result.user.uid
+        const { data: existing } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', uid)
+          .single()
+        if (!existing) {
+          await supabase.from('users').upsert({
+            id: uid,
+            email: result.user.email!,
+            full_name: result.user.displayName,
+            avatar_url: result.user.photoURL,
+            onboarding_complete: false,
+          }, { onConflict: 'id' })
+        }
+        setAuthCookieLocal(uid)
+        router.push('/onboarding')
+      }
+    }).catch((err) => {
+      console.error('Redirect result error:', err)
+    })
+  }, [])
 
   const field = (key: keyof FormData) => ({
     value: form[key] as string,
