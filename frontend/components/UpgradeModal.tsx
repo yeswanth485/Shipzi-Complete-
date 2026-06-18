@@ -1,9 +1,10 @@
 'use client'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Zap, Check } from 'lucide-react'
+import { X, Zap, Check, FlaskConical } from 'lucide-react'
 import { PaymentModal } from '@/components/payment/PaymentModal'
 import { useSubscription } from '@/context/SubscriptionContext'
+import { useUser } from '@/context/UserContext'
 
 interface UpgradeModalProps {
   show: boolean
@@ -13,7 +14,11 @@ interface UpgradeModalProps {
 
 export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProps) {
   const [showPayment, setShowPayment] = useState(false)
+  const [testUpgrading, setTestUpgrading] = useState(false)
   const { refreshSubscription } = useSubscription()
+  const { companyId } = useUser()
+
+  const isTestMode = process.env.NODE_ENV !== 'production'
 
   const handleUpgrade = () => {
     setShowPayment(true)
@@ -23,6 +28,26 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
     setShowPayment(false)
     onClose()
     await refreshSubscription()
+  }
+
+  const handleTestUpgrade = async (planId: string) => {
+    if (!companyId) return
+    setTestUpgrading(true)
+    try {
+      const res = await fetch('/api/test-upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: planId, company_id: companyId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Test upgrade failed')
+      await refreshSubscription()
+      onClose()
+    } catch (err) {
+      console.error('Test upgrade error:', err)
+    } finally {
+      setTestUpgrading(false)
+    }
   }
 
   return (
@@ -102,6 +127,32 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
                     Upgrade Now →
                   </button>
                 </div>
+
+                {/* Test mode: instant upgrade without Razorpay */}
+                {isTestMode && (
+                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <FlaskConical size={14} style={{ color: 'var(--accent-warning)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--accent-warning)' }}>Test Mode — Skip Payment</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleTestUpgrade('pro')}
+                        disabled={testUpgrading}
+                        className="flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
+                        style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', color: 'var(--accent-primary)' }}>
+                        {testUpgrading ? 'Upgrading...' : 'Test Upgrade to Pro'}
+                      </button>
+                      <button
+                        onClick={() => handleTestUpgrade('enterprise')}
+                        disabled={testUpgrading}
+                        className="flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
+                        style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa' }}>
+                        {testUpgrading ? 'Upgrading...' : 'Test Upgrade to Enterprise'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
