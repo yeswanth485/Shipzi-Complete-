@@ -34,9 +34,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Payment history proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Payment history service unavailable' },
+      { success: false, error: 'Payment history service unavailable' },
       { status: 500 }
     )
   }

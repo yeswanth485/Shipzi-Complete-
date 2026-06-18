@@ -89,7 +89,7 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
         console.log('Subscription activation result:', data)
       }
     } catch (e) {
-      console.error('Post-payment activation failed:', e)
+      // Post-payment activation failed — non-fatal, subscription will sync on next refresh
     }
     setShowPayment(false)
     onClose()
@@ -103,9 +103,14 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
     if (!companyId) return
     setTestUpgrading(true)
     try {
+      const token = await auth.currentUser?.getIdToken()
+      if (!token) throw new Error('Not authenticated')
       const res = await fetch('/api/test-upgrade', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ plan_id: planId, company_id: companyId }),
       })
       const data = await res.json()
@@ -113,7 +118,7 @@ export default function UpgradeModal({ show, onClose, reason }: UpgradeModalProp
       await refreshSubscription()
       onClose()
     } catch (err) {
-      console.error('Test upgrade error:', err)
+      // Test upgrade failed — user will see button reset
     } finally {
       setTestUpgrading(false)
     }

@@ -39,7 +39,6 @@ export async function POST(req: Request) {
 
     if (!backendRes.ok) {
       const errorMsg = data.error || data.message || 'Backend optimization failed'
-      console.error(`[PROXY] Backend returned ${backendRes.status}: ${errorMsg}`)
       return NextResponse.json(
         { message: errorMsg },
         { status: backendRes.status }
@@ -54,9 +53,8 @@ export async function POST(req: Request) {
       results: data.result?.results || [],
     })
   } catch (error: any) {
-    console.error('Proxy to backend failed:', error)
     return NextResponse.json(
-      { message: error.message || 'Optimization proxy failed' },
+      { message: 'Optimization service unavailable' },
       { status: 500 }
     )
   }

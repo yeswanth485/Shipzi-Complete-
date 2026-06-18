@@ -71,7 +71,7 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     return;
   }
 
-  // Unknown errors
+  // Unknown errors — never leak internal details in production
   logger.error('Unhandled error', { requestId, message: err.message, stack: err.stack });
   res.status(500).json({
     success: false,

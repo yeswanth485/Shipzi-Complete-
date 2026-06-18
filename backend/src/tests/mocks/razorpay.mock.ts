@@ -2,7 +2,7 @@
 
 import crypto from 'crypto';
 
-const TEST_SECRET = 'rzp_test_secret_key';
+const TEST_SECRET = 'rzp_test_FAKE_SECRET_FOR_TESTING_ONLY';
 
 export const mockRazorpayOrders = {
   create: jest.fn().mockResolvedValue({

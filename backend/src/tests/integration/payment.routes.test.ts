@@ -18,7 +18,7 @@ jest.mock('../../services/payment.service', () => ({
       order_id: 'order_test_123',
       amount: 99900,
       currency: 'INR',
-      key_id: 'rzp_test_key',
+      key_id: 'rzp_test_FAKE_KEY_FOR_TESTING',
     }),
     verifyAndCapturePayment: jest.fn().mockResolvedValue({
       success: true,

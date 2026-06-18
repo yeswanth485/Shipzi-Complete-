@@ -28,9 +28,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Subscription proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Subscription service unavailable' },
+      { success: false, error: 'Subscription service unavailable' },
       { status: 500 }
     )
   }

@@ -38,7 +38,6 @@ export async function GET() {
       return NextResponse.json({
         connected: false,
         status: 'unreachable',
-        error: err instanceof Error ? err.message : String(err),
         attempts: attempt,
       })
     }

@@ -35,9 +35,8 @@ export async function GET(
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Payment get proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Payment service unavailable' },
+      { success: false, error: 'Payment service unavailable' },
       { status: 500 }
     )
   }

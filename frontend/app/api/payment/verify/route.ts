@@ -26,7 +26,6 @@ export async function POST(req: Request) {
     const data = await backendRes.json()
 
     if (!backendRes.ok) {
-      console.error(`[PAYMENT PROXY] Backend returned ${backendRes.status}:`, data.error || data.message)
       return NextResponse.json(
         { success: false, error: data.error || data.message || 'Payment verification failed' },
         { status: backendRes.status }
@@ -35,9 +34,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Payment verify proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Payment verification service unavailable' },
+      { success: false, error: 'Payment verification service unavailable' },
       { status: 500 }
     )
   }

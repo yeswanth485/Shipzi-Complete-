@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -9,6 +11,9 @@ import { CSVRow, CatalogBox } from './services/types';
 dotenv.config();
 
 const app = express();
+
+// Security headers (same as payment server)
+app.use(helmet());
 
 // CORS: Restrict to allowed origins only
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -31,6 +36,31 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
+// Rate limiting for optimization endpoint
+const optimizeRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 optimization requests per 15 min per IP
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { error: 'Too many optimization requests, please try again later' },
+});
+
+// Structured logger for this server
+const log = {
+  info: (msg: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.log(`[OPTIMIZER] ${msg}${metaStr}`);
+  },
+  warn: (msg: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.warn(`[OPTIMIZER] WARN: ${msg}${metaStr}`);
+  },
+  error: (msg: string, meta?: Record<string, unknown>) => {
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    console.error(`[OPTIMIZER] ERROR: ${msg}${metaStr}`);
+  },
+};
+
 // ── Supabase client ─────────────────────────────────────────────
 // Use SERVICE_ROLE key when available (has write access).
 // Fall back to ANON key if service key is not set.
@@ -41,9 +71,9 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('FATAL: Supabase URL or Key is missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Render.');
+  log.error('Supabase URL or Key is missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Render.');
 } else {
-  console.log('Supabase client initialized');
+  log.info('Supabase client initialized');
 }
 
 const supabase = createClient(supabaseUrl || '', supabaseKey || '');
@@ -103,7 +133,7 @@ if (!getApps().length) {
       }),
     });
   } catch (e) {
-    console.error('Firebase admin init failed:', e);
+    log.error('Firebase admin init failed');
   }
 }
 
@@ -124,9 +154,9 @@ async function verifyAuthToken(req: express.Request, res: express.Response, next
 }
 
 // ── Main optimization endpoint ──────────────────────────────────
-app.post('/api/optimize', verifyAuthToken, async (req, res) => {
+app.post('/api/optimize', verifyAuthToken, optimizeRateLimit, async (req, res) => {
   const startTime = Date.now();
-  console.log(`\n[OPTIMIZE] Request received at ${new Date().toISOString()}`);
+  log.info('Request received');
 
   try {
     const { rawRows, companyId, runId, mode } = req.body as {
@@ -138,7 +168,7 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
 
     // ── Validate inputs ─────────────────────────────────────────
     if (!rawRows || !companyId || !runId) {
-      console.error('[OPTIMIZE] Missing required fields');
+      log.warn('Missing required fields');
       return res.status(400).json({
         error: 'Missing required fields: rawRows, companyId, or runId',
       });
@@ -146,11 +176,11 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
 
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(companyId)) {
-      console.error(`[OPTIMIZE] Invalid companyId format: ${companyId}`);
+      log.warn('Invalid companyId format');
       return res.status(400).json({ error: 'Invalid companyId format — must be a UUID' });
     }
     if (!UUID_REGEX.test(runId)) {
-      console.error(`[OPTIMIZE] Invalid runId format: ${runId}`);
+      log.warn('Invalid runId format');
       return res.status(400).json({ error: 'Invalid runId format — must be a UUID' });
     }
 
@@ -176,10 +206,10 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this company' });
     }
 
-    console.log(`[OPTIMIZE] Company: ${companyId}, Run: ${runId}, Rows: ${rawRows.length}`);
+    log.info('Processing optimization', { companyId, runId, rows: rawRows.length });
 
     // ── 1. Fetch box catalog ────────────────────────────────────
-    console.log('[OPTIMIZE] Step 1: Fetching box catalog...');
+    log.info('Step 1: Fetching box catalog');
     const { data: catalogData, error: catalogError } = await supabase
       .from('box_catalog')
       .select('*')
@@ -188,12 +218,12 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
       .order('length_cm', { ascending: true });
 
     if (catalogError) {
-      console.error('[OPTIMIZE] Catalog fetch error:', catalogError);
+      log.error('Catalog fetch error', { error: catalogError.message });
       throw new Error(`Failed to load box catalog: ${catalogError.message}`);
     }
 
     const catalog = (catalogData as CatalogBox[]) || [];
-    console.log(`[OPTIMIZE] Catalog loaded: ${catalog.length} boxes`);
+    log.info('Catalog loaded', { boxes: catalog.length });
 
     if (catalog.length === 0) {
       return res.status(400).json({
@@ -202,22 +232,22 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
     }
 
     // ── 2. Run bulk optimization ────────────────────────────────
-    console.log(`[OPTIMIZE] Step 2: Running ${mode === 'multi' ? 'multi-product' : 'single-product'} optimization...`);
+    log.info('Step 2: Running optimization', { mode: mode === 'multi' ? 'multi-product' : 'single-product' });
     const result = mode === 'multi'
       ? await bulkOptimizeMulti(rawRows, catalog, (processed, total) => {
           if (processed % 100 === 0 || processed === total) {
-            console.log(`[OPTIMIZE] Progress: ${processed}/${total}`);
+            log.info('Progress', { processed, total });
           }
         })
       : await bulkOptimize(rawRows, catalog, (processed, total) => {
           if (processed % 100 === 0 || processed === total) {
-            console.log(`[OPTIMIZE] Progress: ${processed}/${total}`);
+            log.info('Progress', { processed, total });
           }
         });
-    console.log(`[OPTIMIZE] Optimization complete — ${result.summary.total} rows, ${result.summary.optimized} optimized, $${result.summary.total_savings.toFixed(2)} savings`);
+    log.info('Optimization complete', { total: result.summary.total, optimized: result.summary.optimized, savings: result.summary.total_savings });
 
     // ── 3. Insert optimized orders into DB ──────────────────────
-    console.log('[OPTIMIZE] Step 3: Inserting optimized orders...');
+    log.info('Step 3: Inserting optimized orders');
     const insertRows = buildOrderInsertRows(result.results, runId, companyId);
     const CHUNK_SIZE = 500;
     let insertedCount = 0;
@@ -230,7 +260,7 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
         .select('id, fit_status');
 
       if (insertError) {
-        console.error('[OPTIMIZE] Insert chunk error:', insertError.message);
+        log.error('Insert chunk error', { error: insertError.message });
         insertErrors.push(insertError.message);
         continue;
       }
@@ -259,18 +289,18 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
 
         const { error: shipmentError } = await supabase.from('shipments').insert(shipmentRows);
         if (shipmentError) {
-          console.error('[OPTIMIZE] Shipment insert error:', shipmentError.message);
+          log.error('Shipment insert error', { error: shipmentError.message });
         }
       }
     }
 
-    console.log(`[OPTIMIZE] Inserted ${insertedCount} orders`);
+    log.info('Orders inserted', { count: insertedCount });
     if (insertErrors.length > 0) {
-      console.warn(`[OPTIMIZE] ${insertErrors.length} chunk(s) failed to insert:`, insertErrors);
+      log.warn('Some chunks failed to insert', { failures: insertErrors.length });
     }
 
     // ── 4. Update optimization run status ───────────────────────
-    console.log('[OPTIMIZE] Step 4: Updating run status...');
+    log.info('Step 4: Updating run status');
     const { error: runUpdateError } = await supabase.from('optimization_runs').update({
       status: 'complete',
       total_savings_usd: result.summary.total_savings,
@@ -278,7 +308,7 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
     }).eq('id', runId);
 
     if (runUpdateError) {
-      console.error('[OPTIMIZE] Run update error:', runUpdateError.message);
+      log.error('Run update error', { error: runUpdateError.message });
     }
 
     // ── 5. Increment subscription usage ─────────────────────────
@@ -286,7 +316,7 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
       p_company_id: companyId,
     });
     if (usageError) {
-      console.warn('[OPTIMIZE] Usage increment error (non-fatal):', usageError.message);
+      log.warn('Usage increment error (non-fatal)', { error: usageError.message });
     }
 
     // ── 6. Update analytics snapshot ────────────────────────────
@@ -303,7 +333,7 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
     }, { onConflict: 'company_id,snapshot_date' });
 
     if (analyticsError) {
-      console.warn('[OPTIMIZE] Analytics update error (non-fatal):', analyticsError.message);
+      log.warn('Analytics update error (non-fatal)', { error: analyticsError.message });
     }
 
     // ── 7. Create sustainability metrics ────────────────────────
@@ -322,30 +352,31 @@ app.post('/api/optimize', verifyAuthToken, async (req, res) => {
     }, { onConflict: 'company_id,metric_date' });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[OPTIMIZE] Done in ${elapsed}s — ${insertedCount} orders saved\n`);
+    log.info('Done', { elapsed: `${elapsed}s`, orders: insertedCount });
 
     res.json({ success: true, result });
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[OPTIMIZE] FAILED after ${elapsed}s:`, error);
-    const msg = error instanceof Error ? error.message : 'Unknown optimization error';
+    log.error('FAILED', { elapsed: `${elapsed}s` });
 
     if (req.body?.runId) {
       try {
         await supabase.from('optimization_runs').update({ status: 'failed' }).eq('id', req.body.runId);
       } catch (e) {
-        console.error('[OPTIMIZE] Failed to update run status:', e);
+        log.error('Failed to update run status');
       }
     }
 
+    // Sanitize error message for production
+    const msg = error instanceof Error
+      ? (process.env.NODE_ENV === 'production' ? 'Optimization failed' : error.message)
+      : 'Unknown optimization error';
     res.status(500).json({ error: msg });
   }
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`\n🚀 Shipzi Optimization Engine listening on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Optimize: POST http://localhost:${PORT}/api/optimize`);
-  console.log(`   Supabase: ${supabaseUrl ? 'configured' : '⚠️  NOT configured'}\n`);
+  log.info(`Shipzi Optimization Engine listening on port ${PORT}`);
+  log.info('Endpoints', { health: 'GET /health', optimize: 'POST /api/optimize' });
 });

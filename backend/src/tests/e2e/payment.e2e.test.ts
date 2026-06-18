@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 
 const TEST_RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_xxxx';
-const TEST_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'test_secret';
+const TEST_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_FAKE_SECRET_FOR_TESTING';
 const API_URL = process.env.API_URL || 'http://localhost:5000';
 
 function generateWebhookSignature(payload: object, secret: string): string {

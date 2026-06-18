@@ -34,9 +34,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Subscription activate proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Subscription activation service unavailable' },
+      { success: false, error: 'Subscription activation service unavailable' },
       { status: 500 }
     )
   }

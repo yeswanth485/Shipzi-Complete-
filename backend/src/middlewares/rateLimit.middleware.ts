@@ -3,10 +3,13 @@
 import rateLimit from 'express-rate-limit';
 import { CONFIG } from '../config/env';
 
+// Hide rate limit headers in production to prevent attackers from probing limits
+const useStandardHeaders = CONFIG.NODE_ENV !== 'production';
+
 export const globalRateLimit = rateLimit({
   windowMs: CONFIG.RATE_LIMIT_WINDOW_MS,
   max: CONFIG.RATE_LIMIT_MAX_REQUESTS,
-  standardHeaders: true,
+  standardHeaders: useStandardHeaders,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' },
 });
@@ -14,7 +17,7 @@ export const globalRateLimit = rateLimit({
 export const paymentRateLimit = rateLimit({
   windowMs: CONFIG.RATE_LIMIT_WINDOW_MS,
   max: 20,
-  standardHeaders: true,
+  standardHeaders: useStandardHeaders,
   legacyHeaders: false,
   message: { success: false, error: 'Too many payment requests, please try again later' },
 });
@@ -23,6 +26,6 @@ export const paymentRateLimit = rateLimit({
 export const webhookRateLimit = rateLimit({
   windowMs: 1000,
   max: 1000,
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
 });

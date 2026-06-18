@@ -3,12 +3,12 @@
 import crypto from 'crypto';
 import { razorpayService } from '../../services/razorpay.service';
 
-const TEST_SECRET = 'rzp_test_secret_key';
+const TEST_SECRET = 'rzp_test_FAKE_SECRET_FOR_TESTING_ONLY';
 
 // Mock the config
 jest.mock('../../config/env', () => ({
   CONFIG: {
-    RAZORPAY_KEY_ID: 'rzp_test_key',
+    RAZORPAY_KEY_ID: 'rzp_test_FAKE_KEY_FOR_TESTING',
     RAZORPAY_KEY_SECRET: TEST_SECRET,
     RAZORPAY_WEBHOOK_SECRET: 'test_webhook_secret',
     NODE_ENV: 'test',

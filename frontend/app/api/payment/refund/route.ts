@@ -34,9 +34,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Payment refund proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Refund service unavailable' },
+      { success: false, error: 'Refund service unavailable' },
       { status: 500 }
     )
   }

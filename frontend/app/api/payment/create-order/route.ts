@@ -28,7 +28,6 @@ export async function POST(req: Request) {
     const data = await backendRes.json()
 
     if (!backendRes.ok) {
-      console.error(`[PAYMENT PROXY] Backend returned ${backendRes.status}:`, data.error || data.message)
       return NextResponse.json(
         { success: false, error: data.error || data.message || 'Failed to create order' },
         { status: backendRes.status }
@@ -37,9 +36,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    console.error('Payment create-order proxy failed:', error.message)
     return NextResponse.json(
-      { success: false, error: error.message || 'Payment service unavailable' },
+      { success: false, error: 'Payment service unavailable' },
       { status: 500 }
     )
   }

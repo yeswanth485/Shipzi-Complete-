@@ -86,8 +86,8 @@ export const paymentController = {
 
       if (!rawBody || !signature) {
         logger.warn('Webhook missing body or signature');
-        // Return 200 to prevent Razorpay from retrying on malformed requests
-        res.status(200).json({ status: 'ok' });
+        // Return 400 for malformed requests — don't silently accept
+        res.status(400).json({ status: 'error', message: 'Missing body or signature' });
         return;
       }
 
@@ -121,7 +121,10 @@ export const paymentController = {
     try {
       const userId = req.user!.id;
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
+      let limit = parseInt(req.query.limit as string) || 20;
+      // Enforce maximum limit server-side
+      if (limit > 100) limit = 100;
+      if (limit < 1) limit = 20;
       const status = req.query.status as string | undefined;
 
       const result = await paymentService.getPaymentHistory(userId, page, limit, status);
