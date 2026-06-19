@@ -80,6 +80,10 @@ export default function SettingsPage() {
         shipping_regions: userData.companies.shipping_regions ?? [],
       })
       setCompanyLogoUrl(userData.companies.logo_url ?? null)
+    } else {
+      // No company linked yet — show empty form so user can create one
+      setCompanyData({ name: '', industry: '', warehouse_size: '', monthly_shipment_volume: '', packaging_goals: [], sustainability_goals: [], shipping_regions: [] })
+      setCompanyLogoUrl(null)
     }
     const savedNotifs = (userData as unknown as Record<string, unknown>).notification_preferences as Record<string, boolean> | null
     setNotifs(savedNotifs ?? Object.fromEntries(NOTIFICATION_KEYS.map(k => [k, false])))
@@ -118,18 +122,76 @@ export default function SettingsPage() {
   }
 
   const saveCompany = async () => {
-    if (!userData?.company_id) return
+    if (!firebaseUser) return
     setSaving(true)
-    await supabase.from('companies').update({
-      name: companyData.name,
-      industry: companyData.industry,
-      warehouse_size: companyData.warehouse_size,
-      packaging_goals: companyData.packaging_goals,
-      sustainability_goals: companyData.sustainability_goals,
-    }).eq('id', userData.company_id)
-    await refreshUser()
-    setSaving(false)
-    setToast('Company settings saved ✓')
+
+    try {
+      let companyId = userData?.company_id
+
+      // If no company exists yet, create one first
+      if (!companyId) {
+        const { data: newCompany, error: createErr } = await supabase
+          .from('companies')
+          .insert({
+            name: companyData.name || 'My Company',
+            industry: companyData.industry || '',
+            warehouse_size: companyData.warehouse_size || '',
+            monthly_shipment_volume: parseInt(companyData.monthly_shipment_volume) || 100,
+            packaging_goals: companyData.packaging_goals,
+            sustainability_goals: companyData.sustainability_goals,
+          })
+          .select('id')
+          .single()
+
+        if (createErr || !newCompany) {
+          console.error("[Settings] Failed to create company:", createErr)
+          setSaving(false)
+          setToast('Failed to create company: ' + (createErr?.message ?? 'Unknown error'))
+          return
+        }
+
+        companyId = newCompany.id
+        console.log("[Settings] Created company:", companyId)
+
+        // Link user to the new company
+        const { error: linkErr } = await supabase
+          .from('users')
+          .update({ company_id: companyId })
+          .eq('id', firebaseUser.uid)
+
+        if (linkErr) {
+          console.error("[Settings] Failed to link user to company:", linkErr)
+        }
+
+        // Refresh so userData.company_id is set
+        await refreshUser()
+      } else {
+        // Company exists — update it
+        const { error: updateErr } = await supabase.from('companies').update({
+          name: companyData.name,
+          industry: companyData.industry,
+          warehouse_size: companyData.warehouse_size,
+          packaging_goals: companyData.packaging_goals,
+          sustainability_goals: companyData.sustainability_goals,
+        }).eq('id', companyId)
+
+        if (updateErr) {
+          console.error("[Settings] Failed to update company:", updateErr)
+          setSaving(false)
+          setToast('Failed to save: ' + updateErr.message)
+          return
+        }
+
+        await refreshUser()
+      }
+
+      setSaving(false)
+      setToast('Company settings saved ✓')
+    } catch (err: unknown) {
+      console.error("[Settings] saveCompany exception:", err)
+      setSaving(false)
+      setToast('Failed to save company settings.')
+    }
   }
 
   const saveNotifications = async () => {
@@ -161,15 +223,42 @@ export default function SettingsPage() {
 
   const handleCompanyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !firebaseUser || !userData?.company_id) return
+    if (!file || !firebaseUser) return
+    setSaving(true)
+
     try {
+      let companyId = userData?.company_id
+
+      // If no company exists, create one first
+      if (!companyId) {
+        const { data: newCompany, error: createErr } = await supabase
+          .from('companies')
+          .insert({
+            name: companyData.name || 'My Company',
+            industry: companyData.industry || '',
+            warehouse_size: companyData.warehouse_size || '',
+          })
+          .select('id')
+          .single()
+
+        if (createErr || !newCompany) {
+          setSaving(false)
+          setToast('Failed to create company. Please save company settings first.')
+          return
+        }
+
+        companyId = newCompany.id
+        await supabase.from('users').update({ company_id: companyId }).eq('id', firebaseUser.uid)
+        await refreshUser()
+      }
+
       const ext = file.name.split('.').pop() ?? 'png'
-      const path = `company/${userData.company_id}/logo.${ext}`
+      const path = `company/${companyId}/logo.${ext}`
       const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true })
       if (!error) {
         const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
         if (urlData?.publicUrl) {
-          await supabase.from('companies').update({ logo_url: urlData.publicUrl }).eq('id', userData.company_id)
+          await supabase.from('companies').update({ logo_url: urlData.publicUrl }).eq('id', companyId)
           setCompanyLogoUrl(urlData.publicUrl)
           await refreshUser()
           setToast('Company logo updated ✓')
@@ -179,6 +268,8 @@ export default function SettingsPage() {
       }
     } catch (err: any) {
       setToast('Logo upload error: ' + err.message)
+    } finally {
+      setSaving(false)
     }
   }
 

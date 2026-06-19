@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
@@ -44,6 +44,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<FormData>({
     companyName: "",
     industry: "",
@@ -53,6 +56,15 @@ export default function OnboardingPage() {
 
   const updateForm = (updates: Partial<FormData>) =>
     setForm((f) => ({ ...f, ...updates }))
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const handleComplete = async () => {
     if (!firebaseUser) {
@@ -97,7 +109,30 @@ export default function OnboardingPage() {
       return
     }
 
-    // ── Step 2: Create or update users row and link to company ──
+    // ── Step 2: Upload company logo if provided ──
+    if (logoFile && companyId) {
+      try {
+        const ext = logoFile.name.split('.').pop() ?? 'png'
+        const path = `company/${companyId}/logo.${ext}`
+        const { error: uploadErr } = await supabase.storage
+          .from('company-logos')
+          .upload(path, logoFile, { upsert: true })
+
+        if (!uploadErr) {
+          const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
+          if (urlData?.publicUrl) {
+            await supabase.from('companies').update({ logo_url: urlData.publicUrl }).eq('id', companyId)
+            console.log("[Onboarding] Logo uploaded:", urlData.publicUrl)
+          }
+        } else {
+          console.warn("[Onboarding] Logo upload failed (non-fatal):", uploadErr.message)
+        }
+      } catch (err: unknown) {
+        console.warn("[Onboarding] Logo upload exception (non-fatal):", err)
+      }
+    }
+
+    // ── Step 3: Create or update users row and link to company ──
     try {
       const { data: existingUser } = await supabase
         .from("users")
@@ -139,7 +174,27 @@ export default function OnboardingPage() {
       return
     }
 
-    // ── Step 3: Mark onboarding_complete in user_profiles ──
+    // ── Step 4: Create subscription row for the company ──
+    try {
+      const { error: subErr } = await supabase
+        .from("subscriptions")
+        .insert({
+          company_id: companyId,
+          plan: "free",
+          status: "active",
+          current_usage: 0,
+          monthly_shipment_limit: 100,
+        })
+      if (subErr) {
+        console.warn("[Onboarding] Subscription create (non-fatal):", subErr.message)
+      } else {
+        console.log("[Onboarding] Subscription created for company:", companyId)
+      }
+    } catch (err: unknown) {
+      console.warn("[Onboarding] Subscription exception (non-fatal):", err)
+    }
+
+    // ── Step 5: Mark onboarding_complete in user_profiles ──
     try {
       await completeOnboarding(uid)
       console.log("[Onboarding] user_profiles marked complete")
@@ -150,7 +205,7 @@ export default function OnboardingPage() {
       return
     }
 
-    // ── Step 4: Refresh both contexts then redirect ──
+    // ── Step 6: Refresh both contexts then redirect ──
     try {
       await refreshProfile()
       console.log("[Onboarding] AuthContext profile refreshed")
@@ -167,9 +222,10 @@ export default function OnboardingPage() {
   const canAdvance = [
     form.companyName.trim().length > 0 && form.industry.length > 0,
     form.warehouseSize.length > 0 && form.volume.length > 0,
+    true, // step 2 (logo) is optional
   ]
 
-  const steps = ["Company Identity", "Operations"]
+  const steps = ["Company Identity", "Operations", "Company Logo"]
 
   return (
     <div
@@ -220,7 +276,7 @@ export default function OnboardingPage() {
               className="h-1 rounded-full transition-all duration-500"
               style={{
                 background: "var(--accent-primary)",
-                width: `${((step + 1) / 2) * 100}%`,
+                width: `${((step + 1) / 3) * 100}%`,
               }}
             />
           </div>
@@ -379,6 +435,46 @@ export default function OnboardingPage() {
               </div>
             )}
 
+            {step === 2 && (
+              <div className="space-y-6">
+                <h2 className="font-syne text-2xl font-bold text-white">
+                  Add your company logo
+                </h2>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  This is optional — you can add it later from Settings.
+                </p>
+                <div
+                  className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors hover:border-[var(--accent-primary)]"
+                  style={{ borderColor: "var(--border-subtle)", background: "var(--bg-elevated)" }}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.svg"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                  {logoPreview ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Image src={logoPreview} alt="Logo preview" width={120} height={60} className="object-contain rounded-lg" unoptimized />
+                      <span className="text-xs" style={{ color: "var(--accent-success)" }}>Logo selected — click to change</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-4xl mb-3">🖼️</div>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                        Click to upload your company logo
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                        PNG, JPG or SVG
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between mt-8">
               <button
                 onClick={() => setStep((s) => s - 1)}
@@ -388,7 +484,7 @@ export default function OnboardingPage() {
               >
                 ← Back
               </button>
-              {step < 1 ? (
+              {step < 2 ? (
                 <button
                   onClick={() => setStep((s) => s + 1)}
                   disabled={!canAdvance[step]}
