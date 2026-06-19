@@ -40,6 +40,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       .eq('id', user.uid)
       .single()
 
+    if (userErr) {
+      console.error('[UserContext] Supabase error:', JSON.stringify(userErr))
+    }
+
+    // If the table doesn't exist at all (42P01), the SQL migrations haven't been run
+    if (userErr?.code === '42P01') {
+      console.error('[UserContext] CRITICAL: users table does not exist. Run the SQL migrations in Supabase SQL Editor.')
+      console.error('[UserContext] Go to: https://supabase.com/dashboard → your project → SQL Editor → paste and run the contents of database/supabase/migrations/001_initial_schema.sql')
+      return
+    }
+
     // Only create a new user row if it truly doesn't exist (PGRST116 = not found)
     if (userErr && userErr.code === 'PGRST116') {
       console.log('[UserContext] User row not found, creating new user row (NO new company created here)')
