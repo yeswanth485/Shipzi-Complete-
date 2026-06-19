@@ -179,7 +179,12 @@ export default function AnalyticsPage() {
   if (!companyId) return (
     <div className="max-w-7xl mx-auto space-y-4 p-8 text-center glass-card">
       <h2 className="text-xl font-bold text-white mb-2">Company Profile Not Found</h2>
-      <p style={{ color: 'var(--text-muted)' }}>Please try signing out and signing back in.</p>
+      <p style={{ color: 'var(--text-muted)' }}>Please complete your company setup.</p>
+      <a href="/dashboard/settings"
+        className="inline-block mt-4 px-6 py-3 rounded-xl font-medium text-sm transition-opacity hover:opacity-80"
+        style={{ background: 'var(--accent-primary)', color: 'white', border: 'none', cursor: 'pointer', textDecoration: 'none' }}>
+        Go to Settings
+      </a>
     </div>
   )
 
