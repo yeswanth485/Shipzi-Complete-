@@ -191,7 +191,11 @@ export default function LoginPage() {
       await handlePostAuth(uid, !existing)
     } catch (err: any) {
       console.error('[LoginPage] Google sign-in error:', err)
-      setError(`Google sign-in failed. Please try again or use email sign-in.`)
+      if (err.message && err.message.includes('popups')) {
+        setError(err.message)
+      } else {
+        setError('Google sign-in failed. Please try again or use email sign-in.')
+      }
       setLoading(false)
     }
     // Note: don't setLoading(false) on success — page is navigating away

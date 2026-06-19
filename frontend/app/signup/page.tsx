@@ -115,7 +115,11 @@ export default function SignupPage() {
       router.push('/onboarding')
     } catch (err: any) {
       console.error('Google sign-up error:', err)
-      setServerError('Google sign-up failed. Please try again or use email sign-up.')
+      if (err.message && err.message.includes('popups')) {
+        setServerError(err.message)
+      } else {
+        setServerError('Google sign-up failed. Please try again or use email sign-up.')
+      }
     } finally {
       setLoading(false)
     }
