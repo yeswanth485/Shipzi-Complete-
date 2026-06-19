@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -25,16 +25,17 @@ export default function SignupPage() {
   const [companyName, setCompanyName]   = useState('')
   const [agreeTerms, setAgreeTerms]     = useState(false)
   const [showPwd, setShowPwd]           = useState(false)
-  const [loading, setLoading]           = useState(false)
+  const [submitting, setSubmitting]     = useState(false)
   const [error, setError]               = useState('')
 
-  // Process any pending OAuth redirect result. MUST be called to complete
-  // a signInWithRedirect flow. Do NOT setLoading(true) here.
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Process any pending OAuth redirect result.
   useEffect(() => {
+    console.log('[Signup] getRedirectResult called')
     getRedirectResult(auth)
-      .then(() => {
-        // Redirect processed. onAuthStateChanged fires → UserContext handles
-        // cookie + Supabase fetch (including auto-creating user row if missing).
+      .then((result) => {
+        console.log('[Signup] getRedirectResult resolved:', result ? 'has result' : 'null')
       })
       .catch((err) => {
         console.error('[Signup] Google redirect error:', err)
@@ -44,17 +45,42 @@ export default function SignupPage() {
 
   // Redirect when Firebase + Supabase are both resolved.
   useEffect(() => {
+    console.log('[Signup] redirect effect: isLoading=%s firebaseUser=%s userData=%s',
+      isLoading, firebaseUser ? firebaseUser.uid.substring(0, 8) : 'null',
+      userData ? `onboarding=${userData.onboarding_complete}` : 'null')
+
     if (isLoading) return
 
     if (firebaseUser) {
       if (userData) {
-        if (userData.onboarding_complete) {
-          router.replace('/dashboard')
-        } else {
-          router.replace('/onboarding')
+        if (redirectTimer.current) {
+          clearTimeout(redirectTimer.current)
+          redirectTimer.current = null
         }
+        const target = userData.onboarding_complete ? '/dashboard' : '/onboarding'
+        console.log('[Signup] REDIRECTING to', target)
+        router.replace(target)
       } else {
-        router.replace('/onboarding')
+        if (!redirectTimer.current) {
+          console.log('[Signup] firebaseUser set, userData null — starting 5s fallback timer')
+          redirectTimer.current = setTimeout(() => {
+            redirectTimer.current = null
+            console.log('[Signup] FALLBACK TIMEOUT — redirecting to /onboarding')
+            router.replace('/onboarding')
+          }, 5000)
+        }
+      }
+    } else {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
+      }
+    }
+
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
       }
     }
   }, [isLoading, firebaseUser, userData, router])
@@ -76,7 +102,7 @@ export default function SignupPage() {
     e.preventDefault()
     if (!validate()) return
 
-    setLoading(true)
+    setSubmitting(true)
     setError('')
 
     try {
@@ -114,25 +140,23 @@ export default function SignupPage() {
       } else {
         setError('Sign up failed. Please try again.')
       }
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
   // Google signup via redirect
   const handleGoogle = async () => {
-    setLoading(true)
     setError('')
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
       console.error('[Signup] Google sign-up error:', err)
       setError('Failed to start Google sign-in.')
-      setLoading(false)
     }
   }
 
-  // Loading state — only block while actively processing
-  if (loading) {
+  // Loading initial auth state — show spinner (safety timeout in UserContext handles 5s fallback)
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
@@ -217,8 +241,8 @@ export default function SignupPage() {
                   </span>
                 </label>
               </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
-                {loading
+              <button type="submit" disabled={submitting} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
+                {submitting
                   ? <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   : 'Create Account'}
               </button>
@@ -230,7 +254,7 @@ export default function SignupPage() {
               <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
             </div>
 
-            <button onClick={handleGoogle} disabled={loading}
+            <button onClick={handleGoogle}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-medium text-sm transition-opacity hover:opacity-90"
               style={{ background: 'white', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
               <svg width="18" height="18" viewBox="0 0 18 18">

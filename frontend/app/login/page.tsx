@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -19,18 +19,16 @@ export default function LoginPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd]   = useState(false)
-  const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  // Process any pending OAuth redirect result. This MUST be called to complete
-  // a signInWithRedirect flow — without it, Firebase never signs the user in.
-  // CRITICAL: Do NOT setLoading(true) here — that creates a race where loading=true
-  // but firebaseUser=null, trapping the component in the spinner with no redirect.
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Process any pending OAuth redirect result.
   useEffect(() => {
+    console.log('[Login] getRedirectResult called')
     getRedirectResult(auth)
-      .then(() => {
-        // Redirect processed. onAuthStateChanged will fire and UserContext handles
-        // the cookie + Supabase fetch. The redirect effect below handles routing.
+      .then((result) => {
+        console.log('[Login] getRedirectResult resolved:', result ? 'has result' : 'null')
       })
       .catch((err) => {
         console.error('[Login] Google redirect error:', err)
@@ -39,33 +37,60 @@ export default function LoginPage() {
   }, [])
 
   // Redirect when Firebase + Supabase are both resolved.
+  // Includes a fallback timeout: if firebaseUser is set but we never route,
+  // force redirect to /onboarding after 5s.
   useEffect(() => {
+    console.log('[Login] redirect effect: isLoading=%s firebaseUser=%s userData=%s',
+      isLoading, firebaseUser ? firebaseUser.uid.substring(0, 8) : 'null',
+      userData ? `onboarding=${userData.onboarding_complete}` : 'null')
+
     if (isLoading) return
 
     if (firebaseUser) {
       if (userData) {
-        if (userData.onboarding_complete) {
-          router.replace('/dashboard')
-        } else {
-          router.replace('/onboarding')
+        if (redirectTimer.current) {
+          clearTimeout(redirectTimer.current)
+          redirectTimer.current = null
         }
+        const target = userData.onboarding_complete ? '/dashboard' : '/onboarding'
+        console.log('[Login] REDIRECTING to', target)
+        router.replace(target)
       } else {
-        router.replace('/onboarding')
+        if (!redirectTimer.current) {
+          console.log('[Login] firebaseUser set, userData null — starting 5s fallback timer')
+          redirectTimer.current = setTimeout(() => {
+            redirectTimer.current = null
+            console.log('[Login] FALLBACK TIMEOUT — redirecting to /onboarding')
+            router.replace('/onboarding')
+          }, 5000)
+        }
+      }
+    } else {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
+      }
+    }
+
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
       }
     }
   }, [isLoading, firebaseUser, userData, router])
 
   // Email + password login
+  const [submitting, setSubmitting] = useState(false)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setSubmitting(true)
     setError('')
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      // Success → onAuthStateChanged fires → UserContext sets cookie + fetches data
-      // → redirect effect above handles routing
     } catch (err: any) {
+      setSubmitting(false)
       const code = err?.code || ''
       if (code === 'auth/user-not-found') {
         setError('No account found with this email. Please sign up first.')
@@ -80,25 +105,23 @@ export default function LoginPage() {
       } else {
         setError('Login failed. Please try again.')
       }
-      setLoading(false)
     }
   }
 
   // Google login via redirect
   const handleGoogle = async () => {
-    setLoading(true)
     setError('')
+    console.log('[Login] Starting Google sign-in redirect')
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
       console.error('[Login] Google sign-in error:', err)
       setError('Failed to start Google sign-in.')
-      setLoading(false)
     }
   }
 
-  // Loading state — only block while actively processing (not during initial load)
-  if (loading) {
+  // Already logged in — show spinner and wait for redirect
+  if (firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
@@ -107,8 +130,8 @@ export default function LoginPage() {
     )
   }
 
-  // Already logged in — wait for redirect
-  if (firebaseUser) {
+  // Loading initial auth state — show spinner (safety timeout in UserContext handles 5s fallback)
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
@@ -156,8 +179,8 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
-                {loading
+              <button type="submit" disabled={submitting} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
+                {submitting
                   ? <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   : 'Sign In'}
               </button>
@@ -169,7 +192,7 @@ export default function LoginPage() {
               <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
             </div>
 
-            <button onClick={handleGoogle} disabled={loading}
+            <button onClick={handleGoogle}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl font-medium text-sm transition-opacity hover:opacity-90"
               style={{ background: 'white', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
               <svg width="18" height="18" viewBox="0 0 18 18">
