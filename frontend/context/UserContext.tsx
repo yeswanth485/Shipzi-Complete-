@@ -24,33 +24,32 @@ export function useUser(): UserContextType {
 export function UserProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null)
   const [userData, setUserData] = useState<UserRow | null>(null)
+  // Start as TRUE — stays true until Firebase has resolved its initial auth state.
+  // This prevents the dashboard layout from seeing (isLoading=false, user=null)
+  // during the brief window while Firebase restores the session from persistence.
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchUserData = useCallback(async (user: FirebaseUser) => {
-    // Stage 1: Get the user row (simple query — no joins that could fail)
+    console.log('[UserContext] fetchUserData for uid:', user.uid)
+
+    // Stage 1: Get the user row
     let { data: userRow, error: userErr } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.uid)
       .single()
 
-    // If the user row does not exist, insert a new one
+    // Only create a new user row if it truly doesn't exist (PGRST116 = not found)
     if (userErr && userErr.code === 'PGRST116') {
-      // Create a new company for this user instead of using a shared demo company
-      const { data: newCompany, error: companyCreateErr } = await supabase
-        .from('companies')
-        .insert({ name: `${user.displayName || user.email || 'My Company'}'s Company` })
-        .select('id')
-        .single()
-
-      const companyId = newCompany?.id ?? null
-
+      console.log('[UserContext] User row not found, creating new user row (NO new company created here)')
+      // Do NOT create a company here — onboarding handles company creation.
+      // Just create the user row with no company_id so onboarding can assign one.
       const newUser = {
         id: user.uid,
         email: user.email || '',
         full_name: user.displayName || '',
         avatar_url: user.photoURL || '',
-        company_id: companyId,
+        company_id: null,
         onboarding_complete: false,
         role: 'member',
       }
@@ -58,20 +57,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
         .from('users')
         .insert([newUser])
         .select('*')
-        .single();
+        .single()
+
       if (insertErr) {
-        console.error('Error inserting new user:', insertErr);
-        return;
+        // If insert fails with unique violation, the row was created in a race — re-fetch it
+        if (insertErr.code === '23505') {
+          console.log('[UserContext] Race condition on insert, re-fetching user row')
+          const { data: refetched } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.uid)
+            .single()
+          userRow = refetched
+        } else {
+          console.error('[UserContext] Error inserting new user:', insertErr)
+          return
+        }
+      } else {
+        userRow = inserted
       }
-      userRow = inserted;
     } else if (userErr) {
-      console.error("fetchUserData error:", userErr)
+      console.error('[UserContext] fetchUserData error:', userErr)
       return
     }
-    if (!userRow) return
 
-    // Stage 2: If user has a company_id, try to load company data separately
-    // This is a separate query so if it fails, we still have companyId
+    if (!userRow) {
+      console.warn('[UserContext] userRow is null after fetch/insert')
+      return
+    }
+
+    console.log('[UserContext] userRow loaded:', {
+      id: userRow.id,
+      onboarding_complete: userRow.onboarding_complete,
+      company_id: userRow.company_id,
+    })
+
+    // Stage 2: If user has a company_id, load company data separately
     let companyData = null
     if (userRow.company_id) {
       const { data: company, error: companyErr } = await supabase
@@ -80,15 +101,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
         .eq('id', userRow.company_id)
         .single()
       if (companyErr) {
-        console.error("fetchCompany error (non-fatal):", companyErr)
+        console.warn('[UserContext] fetchCompany error (non-fatal):', companyErr)
       } else {
         companyData = company
       }
     }
 
-    // Merge company data into userData so settings page can access it
     setUserData({ ...userRow, companies: companyData } as UserRow)
-
   }, [])
 
   const refreshUser = useCallback(async () => {
@@ -96,19 +115,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [firebaseUser, fetchUserData])
 
   useEffect(() => {
+    console.log('[UserContext] Setting up onAuthStateChanged listener')
+
     const unsub = onAuthStateChanged(auth, async (user) => {
+      console.log('[UserContext] onAuthStateChanged fired, user:', user ? user.uid : 'null')
       setFirebaseUser(user)
+
       if (user) {
         try {
           await fetchUserData(user)
         } catch (e) {
-          console.error('fetchUserData failed:', e)
+          console.error('[UserContext] fetchUserData failed:', e)
         }
       } else {
         setUserData(null)
       }
+
+      // Only mark loading done AFTER we've resolved user state.
+      // This is the key fix: isLoading stays true until Firebase confirms
+      // whether the user is logged in or not.
       setIsLoading(false)
     })
+
     return unsub
   }, [fetchUserData])
 

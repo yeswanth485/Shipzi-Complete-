@@ -15,9 +15,12 @@ import {
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import { setAuthCookie, setOnboardingComplete } from '@/lib/auth-cookies'
+import { useUser } from '@/context/UserContext'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { firebaseUser, userData, isLoading } = useUser()
+
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
@@ -26,35 +29,91 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  const handlePostAuth = async (uid: string, isNew = false) => {
-    setAuthCookie(uid)
-    if (isNew) {
-      router.push('/onboarding')
-    } else {
-      const { data } = await supabase
-        .from('users')
-        .select('onboarding_complete')
-        .eq('id', uid)
-        .single()
-      if (data?.onboarding_complete) {
-        setOnboardingComplete()
-        router.push('/dashboard')
-      } else {
-        router.push('/onboarding')
+  // If the user is already authenticated, redirect them away from login.
+  // This runs AFTER Firebase has restored the session (isLoading=false),
+  // so we know the auth state is definitive.
+  useEffect(() => {
+    if (!isLoading && firebaseUser) {
+      console.log('[LoginPage] User already authenticated, checking onboarding status')
+      // userData may still be loading — wait for it
+      if (userData !== null) {
+        if (userData.onboarding_complete) {
+          console.log('[LoginPage] Onboarding complete, redirecting to /dashboard')
+          router.replace('/dashboard')
+        } else {
+          console.log('[LoginPage] Onboarding incomplete, redirecting to /onboarding')
+          router.replace('/onboarding')
+        }
       }
+    }
+  }, [isLoading, firebaseUser, userData, router])
+
+  /**
+   * After a successful auth event (email login, register, or Google),
+   * this function:
+   * 1. Sets the auth cookie so middleware allows /dashboard access
+   * 2. Checks Supabase for onboarding_complete flag
+   * 3. Redirects to the correct destination
+   */
+  const handlePostAuth = async (uid: string, isNew = false) => {
+    console.log('[LoginPage] handlePostAuth uid:', uid, 'isNew:', isNew)
+
+    // Set the auth cookie BEFORE any redirect so middleware passes the request
+    setAuthCookie(uid)
+
+    if (isNew) {
+      console.log('[LoginPage] New user → /onboarding')
+      router.push('/onboarding')
+      return
+    }
+
+    // Existing user: check their onboarding status from Supabase
+    const { data, error: supaErr } = await supabase
+      .from('users')
+      .select('onboarding_complete')
+      .eq('id', uid)
+      .single()
+
+    console.log('[LoginPage] Supabase onboarding check:', { data, supaErr })
+
+    if (supaErr) {
+      // If we can't fetch the user row, treat as new (send to onboarding)
+      console.warn('[LoginPage] Could not fetch user row, defaulting to /onboarding:', supaErr)
+      router.push('/onboarding')
+      return
+    }
+
+    if (data?.onboarding_complete) {
+      setOnboardingComplete()
+      console.log('[LoginPage] onboarding_complete=true → /dashboard')
+      router.push('/dashboard')
+    } else {
+      console.log('[LoginPage] onboarding_complete=false → /onboarding')
+      router.push('/onboarding')
     }
   }
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
+      console.log('[LoginPage] Email login attempt for:', email)
       const cred = await signInWithEmailAndPassword(auth, email, password)
-      const { data: existing } = await supabase
+      console.log('[LoginPage] Firebase sign-in success, uid:', cred.user.uid)
+
+      // Check if the user exists in Supabase
+      const { data: existing, error: fetchErr } = await supabase
         .from('users')
         .select('id')
         .eq('id', cred.user.uid)
         .single()
+
+      if (fetchErr && fetchErr.code !== 'PGRST116') {
+        console.error('[LoginPage] Supabase fetch error:', fetchErr)
+      }
+
+      // If user doesn't exist in Supabase, create them
       if (!existing) {
         await supabase.from('users').upsert({
           id: cred.user.uid,
@@ -64,17 +123,20 @@ export default function LoginPage() {
           onboarding_complete: false,
         }, { onConflict: 'id' })
       }
+
       await handlePostAuth(cred.user.uid, !existing)
-    } catch {
+    } catch (err: any) {
+      console.error('[LoginPage] Email login error:', err)
       setError('Invalid email or password. Please try again.')
-    } finally {
       setLoading(false)
     }
+    // Note: don't setLoading(false) on success — page is navigating away
   }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       if (name) {
@@ -97,13 +159,14 @@ export default function LoginPage() {
       } else {
         setError(`Registration failed: ${msg}`)
       }
-    } finally {
       setLoading(false)
     }
+    // Note: don't setLoading(false) on success — page is navigating away
   }
 
   const handleGoogle = async () => {
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
       const provider = new GoogleAuthProvider()
       let result
@@ -121,26 +184,29 @@ export default function LoginPage() {
         }
         throw popupErr
       }
+
       const uid = result.user.uid
       const { data: existing } = await supabase
         .from('users')
         .select('id, onboarding_complete')
         .eq('id', uid)
         .single()
+
       await handlePostAuth(uid, !existing)
     } catch (err: any) {
-      console.error('Google sign-in error:', err)
-      const msg = err.message || 'Unknown error occurred'
+      console.error('[LoginPage] Google sign-in error:', err)
       setError(`Google sign-in failed. Please try again or use email sign-in.`)
-    } finally {
       setLoading(false)
     }
+    // Note: don't setLoading(false) on success — page is navigating away
   }
 
-  // Handle redirect result on page load
+  // Handle Google redirect result on page load
   useEffect(() => {
     getRedirectResult(auth).then(async (result) => {
       if (result?.user) {
+        console.log('[LoginPage] Google redirect result, uid:', result.user.uid)
+        setLoading(true)
         const uid = result.user.uid
         const { data: existing } = await supabase
           .from('users')
@@ -150,9 +216,29 @@ export default function LoginPage() {
         await handlePostAuth(uid, !existing)
       }
     }).catch((err) => {
-      console.error('Redirect result error:', err)
+      console.error('[LoginPage] Redirect result error:', err)
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show loading spinner while checking existing auth state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
+        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
+      </div>
+    )
+  }
+
+  // If user is already logged in, show spinner while redirect completes
+  if (firebaseUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
+        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>

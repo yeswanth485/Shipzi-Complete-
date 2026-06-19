@@ -165,13 +165,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('click', handler)
   }, [avatarDropdown])
 
+  // FIXED AUTH GUARD:
+  // We wait for isLoading to be false (Firebase session fully resolved) before
+  // making any redirect decision. This prevents the false-negative where
+  // firebaseUser is null for a brief moment while Firebase restores from persistence.
   useEffect(() => {
     if (!isLoading && !firebaseUser) {
-      router.push('/login')
+      console.log('[DashboardLayout] No authenticated user after loading, redirecting to /login')
+      router.replace('/login')
     }
   }, [firebaseUser, isLoading, router])
 
-  if (isLoading) {
+  // Show spinner while Firebase is resolving session.
+  // This is the safe state — we don't know if the user is logged in yet.
+  if (isLoading || !firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-void)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"

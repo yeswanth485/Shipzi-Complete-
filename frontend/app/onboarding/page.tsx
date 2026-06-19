@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -51,7 +51,7 @@ function MultiSelectChip({ label, selected, onClick }: { label: string; selected
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { firebaseUser, refreshUser } = useUser()
+  const { firebaseUser, userData, isLoading, refreshUser } = useUser()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -65,6 +65,24 @@ export default function OnboardingPage() {
     packagingGoals: [],
     sustainabilityGoals: [],
   })
+
+  // Auth guard: redirect unauthenticated users to login,
+  // redirect already-onboarded users straight to dashboard.
+  useEffect(() => {
+    if (isLoading) return // Wait for Firebase to resolve
+
+    if (!firebaseUser) {
+      console.log('[OnboardingPage] No auth user, redirecting to /login')
+      router.replace('/login')
+      return
+    }
+
+    if (userData?.onboarding_complete) {
+      console.log('[OnboardingPage] Already onboarded, redirecting to /dashboard')
+      router.replace('/dashboard')
+    }
+  }, [isLoading, firebaseUser, userData, router])
+
 
   const updateForm = (updates: Partial<FormData>) => setForm(f => ({ ...f, ...updates }))
 
@@ -196,8 +214,19 @@ export default function OnboardingPage() {
 
   const steps = ['Company Identity', 'Operations', 'Goals']
 
+  // Show spinner while Firebase resolves auth state or while redirecting
+  if (isLoading || !firebaseUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-void)' }}>
+        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg-void)' }}>
+
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 justify-center mb-10">
