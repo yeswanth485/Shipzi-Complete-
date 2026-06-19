@@ -1,12 +1,11 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
   createUserWithEmailAndPassword,
   signInWithRedirect,
-  getRedirectResult,
   GoogleAuthProvider,
   updateProfile,
 } from 'firebase/auth'
@@ -28,83 +27,20 @@ export default function SignupPage() {
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
 
-  const redirectHandled = useRef(false)
-  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Handle Google redirect result (runs once on mount)
-  useEffect(() => {
-    if (redirectHandled.current) return
-    redirectHandled.current = true
-
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result?.user) {
-          setLoading(true)
-          const uid = result.user.uid
-
-          const { data } = await supabase
-            .from('users')
-            .select('onboarding_complete')
-            .eq('id', uid)
-            .single()
-
-          if (!data) {
-            await supabase.from('users').upsert({
-              id: uid,
-              email: result.user.email || '',
-              full_name: result.user.displayName || '',
-              avatar_url: result.user.photoURL || '',
-              onboarding_complete: false,
-            }, { onConflict: 'id' })
-          }
-        }
-      })
-      .catch((err) => {
-        console.error('[Signup] Google redirect error:', err)
-        setError('Google sign-in failed. Please try again.')
-        setLoading(false)
-      })
-  }, [])
-
-  // Redirect effect with timeout: wait up to 4s for userData to load after
-  // firebaseUser is resolved before falling back to /onboarding.
+  // Redirect when Firebase + Supabase are both resolved.
+  // onAuthStateChanged in UserContext handles everything (cookie + Supabase fetch).
   useEffect(() => {
     if (isLoading) return
 
-    if (!firebaseUser) {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current)
-        redirectTimer.current = null
-      }
-      return
-    }
-
-    if (userData) {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current)
-        redirectTimer.current = null
-      }
-      if (userData.onboarding_complete) {
-        router.replace('/dashboard')
+    if (firebaseUser) {
+      if (userData) {
+        if (userData.onboarding_complete) {
+          router.replace('/dashboard')
+        } else {
+          router.replace('/onboarding')
+        }
       } else {
         router.replace('/onboarding')
-      }
-      return
-    }
-
-    if (!redirectTimer.current) {
-      console.log('[Signup] firebaseUser set, waiting up to 4s for userData...')
-      redirectTimer.current = setTimeout(() => {
-        console.log('[Signup] userData timeout — redirecting to /onboarding as fallback')
-        redirectTimer.current = null
-        router.replace('/onboarding')
-      }, 4000)
-    }
-
-    return () => {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current)
-        redirectTimer.current = null
       }
     }
   }, [isLoading, firebaseUser, userData, router])
