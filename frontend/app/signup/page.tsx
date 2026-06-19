@@ -103,15 +103,21 @@ export default function SignupPage() {
           } else {
             router.push('/onboarding')
           }
+          return
         }
       } catch (err: any) {
         console.error('Redirect error:', err)
         setServerError('Google sign-in failed. Please try again.')
         setLoading(false)
+        return
+      }
+
+      if (firebaseUser && userData?.onboarding_complete) {
+        router.replace('/dashboard')
       }
     }
     checkRedirect()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [firebaseUser, userData, router])
 
   const field = (key: keyof FormData) => ({
     value: form[key] as string,

@@ -28,16 +28,10 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  useEffect(() => {
-    if (firebaseUser && userData?.onboarding_complete) {
-      router.push('/dashboard')
-    }
-  }, [firebaseUser, userData, router])
-
   const handlePostAuth = async (uid: string) => {
     setAuthCookie(uid)
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('users')
       .select('onboarding_complete')
       .eq('id', uid)
@@ -50,6 +44,29 @@ export default function LoginPage() {
       router.push('/onboarding')
     }
   }
+
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result?.user) {
+          setLoading(true)
+          await handlePostAuth(result.user.uid)
+          return
+        }
+      } catch (err: any) {
+        console.error('Redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      if (firebaseUser && userData?.onboarding_complete) {
+        router.push('/dashboard')
+      }
+    }
+    checkRedirect()
+  }, [firebaseUser, userData, router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,8 +82,7 @@ export default function LoginPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       if (name) {
@@ -91,7 +107,6 @@ export default function LoginPage() {
       }
       setLoading(false)
     }
-    // Note: don't setLoading(false) on success — page is navigating away
   }
 
   const handleGoogle = async () => {
@@ -104,23 +119,6 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth)
-        if (result?.user) {
-          setLoading(true)
-          await handlePostAuth(result.user.uid)
-        }
-      } catch (err: any) {
-        console.error('Redirect error:', err)
-        setError('Google sign-in failed. Please try again.')
-        setLoading(false)
-      }
-    }
-    checkRedirect()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show loading spinner while checking existing auth state
   if (isLoading) {

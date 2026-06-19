@@ -50,7 +50,7 @@ const nextConfig = {
               "frame-src 'self' https://checkout.razorpay.com https://*.google.com",
               "object-src 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              "form-action 'self' https://accounts.google.com https://*.firebaseapp.com",
               "frame-ancestors 'none'",
             ].join('; '),
           },
