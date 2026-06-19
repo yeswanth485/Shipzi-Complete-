@@ -1,10 +1,14 @@
 import { createClient } from "@supabase/supabase-js"
 import type { CatalogBox, OptimizedOrderRow } from "./types"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("[Supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY")
+}
+
+const supabase = createClient(supabaseUrl || "", supabaseKey || "")
 
 export { supabase }
 
@@ -21,14 +25,22 @@ export interface UserProfile {
 }
 
 export async function getProfile(uid: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("*")
-    .eq("uid", uid)
-    .maybeSingle()
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("uid", uid)
+      .maybeSingle()
 
-  if (error) throw error
-  return data as UserProfile | null
+    if (error) {
+      console.error("[Supabase] getProfile error:", error.message, error.code)
+      return null
+    }
+    return (data as UserProfile) || null
+  } catch (e) {
+    console.error("[Supabase] getProfile exception:", e)
+    return null
+  }
 }
 
 export async function upsertProfile(
@@ -36,25 +48,33 @@ export async function upsertProfile(
   email: string,
   displayName: string | null,
   photoUrl: string | null
-): Promise<UserProfile> {
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .upsert(
-      {
-        uid,
-        email,
-        display_name: displayName,
-        photo_url: photoUrl,
-        updated_at: now,
-      },
-      { onConflict: "uid", ignoreDuplicates: false }
-    )
-    .select()
-    .single()
+): Promise<UserProfile | null> {
+  try {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .upsert(
+        {
+          uid,
+          email,
+          display_name: displayName,
+          photo_url: photoUrl,
+          updated_at: now,
+        },
+        { onConflict: "uid", ignoreDuplicates: false }
+      )
+      .select()
+      .maybeSingle()
 
-  if (error) throw error
-  return data as UserProfile
+    if (error) {
+      console.error("[Supabase] upsertProfile error:", error.message, error.code)
+      return null
+    }
+    return (data as UserProfile) || null
+  } catch (e) {
+    console.error("[Supabase] upsertProfile exception:", e)
+    return null
+  }
 }
 
 export async function completeOnboarding(uid: string): Promise<void> {

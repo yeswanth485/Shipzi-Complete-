@@ -21,7 +21,7 @@ export function useAuthRedirect() {
       router.replace(path)
     }
 
-    // Not logged in
+    // Not logged in → redirect to login (unless already on a public page)
     if (!firebaseUser) {
       if (!PUBLIC_PATHS.includes(pathname)) {
         doRedirect("/login")
@@ -29,20 +29,26 @@ export function useAuthRedirect() {
       return
     }
 
-    // Logged in but on auth pages
+    // Logged in on /login or /signup → redirect based on profile
     if (pathname === "/login" || pathname === "/signup") {
-      if (!profile) return
-      doRedirect(profile.onboarding_complete ? "/dashboard" : "/onboarding")
+      // If profile loaded, check onboarding status
+      if (profile) {
+        doRedirect(profile.onboarding_complete ? "/dashboard" : "/onboarding")
+      } else {
+        // Profile failed to load or still loading → go to onboarding anyway
+        // (onboarding page will create the profile if needed)
+        doRedirect("/onboarding")
+      }
       return
     }
 
-    // On dashboard but not onboarded
+    // On dashboard but not onboarded → redirect to onboarding
     if (pathname.startsWith("/dashboard") && profile && !profile.onboarding_complete) {
       doRedirect("/onboarding")
       return
     }
 
-    // On onboarding but already onboarded
+    // On onboarding but already onboarded → redirect to dashboard
     if (pathname === "/onboarding" && profile?.onboarding_complete) {
       doRedirect("/dashboard")
       return

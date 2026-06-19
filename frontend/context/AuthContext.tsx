@@ -8,7 +8,11 @@ import {
   useRef,
   type ReactNode,
 } from "react"
-import { onAuthStateChanged, signOut, type User as FirebaseUser } from "firebase/auth"
+import {
+  onAuthStateChanged,
+  signOut,
+  type User as FirebaseUser,
+} from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import {
   getProfile,
@@ -42,28 +46,6 @@ function clearAuthCookie() {
   document.cookie = "firebase_token=; path=/; max-age=0"
 }
 
-async function loadProfile(user: FirebaseUser): Promise<UserProfile> {
-  console.log("[Auth] Loading profile for UID:", user.uid)
-
-  let profile = await getProfile(user.uid)
-
-  if (!profile) {
-    console.log("[Auth] No profile found — creating one")
-    profile = await upsertProfile(
-      user.uid,
-      user.email || "",
-      user.displayName || null,
-      user.photoURL || null
-    )
-    console.log("[Auth] Profile created:", JSON.stringify(profile))
-  } else {
-    console.log("[Auth] Profile loaded:", JSON.stringify(profile))
-  }
-
-  console.log("[Auth] onboarding_complete:", profile.onboarding_complete)
-  return profile
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -94,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         console.log("[Auth] Firebase user detected:", user.uid)
 
+        // Write cookie FIRST so middleware allows navigation
         try {
           const token = await user.getIdToken()
           writeAuthCookie(token)
@@ -102,19 +85,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn("[Auth] Failed to write token cookie")
         }
 
+        // Load or create profile — NEVER let this block the user
         try {
-          const p = await loadProfile(user)
+          console.log("[Auth] Loading profile for UID:", user.uid)
+          let profileData = await getProfile(user.uid)
+
+          if (!profileData) {
+            console.log("[Auth] No profile found — creating one")
+            profileData = await upsertProfile(
+              user.uid,
+              user.email || "",
+              user.displayName || null,
+              user.photoURL || null
+            )
+            if (profileData) {
+              console.log("[Auth] Profile created:", JSON.stringify(profileData))
+            } else {
+              console.warn("[Auth] upsertProfile returned null — creating minimal profile")
+            }
+          } else {
+            console.log("[Auth] Profile loaded:", JSON.stringify(profileData))
+          }
+
           if (mountedRef.current) {
             setFirebaseUser(user)
-            setProfile(p)
+            setProfile(profileData)
             setLoading(false)
           }
         } catch (e: unknown) {
+          console.error("[Auth] Profile load failed:", e)
           if (mountedRef.current) {
             setFirebaseUser(user)
             setProfile(null)
             setLoading(false)
-            setError(e instanceof Error ? e.message : "Failed to load profile")
+            setError(
+              e instanceof Error ? e.message : "Failed to load profile"
+            )
           }
         }
       } else {
@@ -146,10 +152,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     if (!firebaseUser) return
     try {
-      const p = await loadProfile(firebaseUser)
-      setProfile(p)
+      console.log("[Auth] Refreshing profile for UID:", firebaseUser.uid)
+      let profileData = await getProfile(firebaseUser.uid)
+      if (!profileData) {
+        profileData = await upsertProfile(
+          firebaseUser.uid,
+          firebaseUser.email || "",
+          firebaseUser.displayName || null,
+          firebaseUser.photoURL || null
+        )
+      }
+      setProfile(profileData)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to refresh profile")
+      console.error("[Auth] refreshProfile failed:", e)
+      setError(
+        e instanceof Error ? e.message : "Failed to refresh profile"
+      )
     }
   }, [firebaseUser])
 

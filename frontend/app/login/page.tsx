@@ -2,9 +2,13 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useGoogleLogin } from "@/hooks/useGoogleLogin"
+import { useAuth } from "@/context/AuthContext"
 
 export default function LoginPage() {
-  const { signInWithGoogle, loading, error, clearError } = useGoogleLogin()
+  const { signInWithGoogle, loading: googleLoading, error: googleError, clearError } = useGoogleLogin()
+  const { error: authError } = useAuth()
+
+  const displayError = googleError || authError
 
   return (
     <div
@@ -43,7 +47,7 @@ export default function LoginPage() {
               Sign in to your Shipzi workspace
             </p>
 
-            {error && (
+            {displayError && (
               <div
                 className="mb-5 p-4 rounded-xl text-sm flex items-center justify-between"
                 style={{
@@ -52,7 +56,7 @@ export default function LoginPage() {
                   color: "var(--accent-danger)",
                 }}
               >
-                <span>{error}</span>
+                <span>{displayError}</span>
                 <button
                   onClick={clearError}
                   style={{
@@ -70,17 +74,17 @@ export default function LoginPage() {
 
             <button
               onClick={signInWithGoogle}
-              disabled={loading}
+              disabled={googleLoading}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl font-medium text-sm transition-opacity hover:opacity-90"
               style={{
                 background: "white",
                 color: "#1a1a1a",
                 border: "none",
-                cursor: loading ? "wait" : "pointer",
-                opacity: loading ? 0.7 : 1,
+                cursor: googleLoading ? "wait" : "pointer",
+                opacity: googleLoading ? 0.7 : 1,
               }}
             >
-              {loading ? (
+              {googleLoading ? (
                 <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
               ) : (
                 <>
