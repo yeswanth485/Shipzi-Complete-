@@ -201,10 +201,10 @@ export default function OnboardingPage() {
       // 3. Subscription is auto-created by backend when user first loads the app
       //    (no need to insert here — RLS blocks client-side inserts on subscriptions)
 
-      // 4. Set cookie FIRST so middleware allows /dashboard, then redirect immediately
+      // 4. Set cookie FIRST so middleware allows /dashboard
       setOnboardingComplete()
-      // Refresh context in background — don't await so we don't block the redirect
-      refreshUser().catch(console.error)
+      // Refresh context so dashboard layout sees onboarding_complete=true immediately
+      await refreshUser()
       router.push('/dashboard')
     } catch (err: any) {
       console.error('Onboarding complete error:', err)
