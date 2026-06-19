@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [error, setError]       = useState('')
 
   const redirectHandled = useRef(false)
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Handle Google redirect result (runs once on mount)
   useEffect(() => {
@@ -32,9 +33,6 @@ export default function LoginPage() {
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          // Firebase auth succeeded via redirect.
-          // UserContext.onAuthStateChanged will fire → sets cookie + fetches Supabase data.
-          // The redirect effect below will handle routing.
           setLoading(true)
         }
       })
@@ -45,22 +43,46 @@ export default function LoginPage() {
       })
   }, [])
 
-  // Redirect based on auth state (UserContext handles cookie + Supabase)
+  // Redirect effect with timeout: wait up to 4s for userData to load after
+  // firebaseUser is resolved before falling back to /onboarding.
   useEffect(() => {
-    if (isLoading) return // Wait for Firebase to resolve
+    if (isLoading) return
 
-    if (firebaseUser) {
-      if (userData) {
-        // UserContext loaded Supabase data — route based on onboarding
-        if (userData.onboarding_complete) {
-          router.replace('/dashboard')
-        } else {
-          router.replace('/onboarding')
-        }
+    if (!firebaseUser) {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
+      }
+      return
+    }
+
+    if (userData) {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
+      }
+      if (userData.onboarding_complete) {
+        router.replace('/dashboard')
       } else {
-        // Firebase auth works but Supabase data didn't load.
-        // Still send to onboarding — it will create the row there.
         router.replace('/onboarding')
+      }
+      return
+    }
+
+    // firebaseUser is set but userData is still null — wait for it
+    if (!redirectTimer.current) {
+      console.log('[Login] firebaseUser set, waiting up to 4s for userData...')
+      redirectTimer.current = setTimeout(() => {
+        console.log('[Login] userData timeout — redirecting to /onboarding as fallback')
+        redirectTimer.current = null
+        router.replace('/onboarding')
+      }, 4000)
+    }
+
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+        redirectTimer.current = null
       }
     }
   }, [isLoading, firebaseUser, userData, router])

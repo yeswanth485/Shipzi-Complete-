@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -66,14 +66,21 @@ export default function OnboardingPage() {
     sustainabilityGoals: [],
   })
 
+  // Guard: once we've seen a valid firebaseUser, don't redirect to /login
+  // even if it momentarily becomes null (prevents redirect loops).
+  const hasSeenUser = useRef(false)
+  if (firebaseUser) hasSeenUser.current = true
+
   // Auth guard: redirect unauthenticated users to login,
   // redirect already-onboarded users straight to dashboard.
   useEffect(() => {
-    if (isLoading) return // Wait for Firebase to resolve
+    if (isLoading) return
 
     if (!firebaseUser) {
-      console.log('[OnboardingPage] No auth user, redirecting to /login')
-      router.replace('/login')
+      if (!hasSeenUser.current) {
+        console.log('[OnboardingPage] No auth user, redirecting to /login')
+        router.replace('/login')
+      }
       return
     }
 
