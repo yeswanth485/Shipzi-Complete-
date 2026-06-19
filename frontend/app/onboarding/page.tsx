@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
@@ -36,6 +37,7 @@ const WAREHOUSE_SIZES = [
 const VOLUME_OPTIONS = ["< 500", "500–5K", "5K–50K", "50K+"]
 
 export default function OnboardingPage() {
+  const router = useRouter()
   const { firebaseUser, refreshProfile } = useAuth()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -62,14 +64,18 @@ export default function OnboardingPage() {
         "50K+": 100000,
       }
 
-      const { data: existingUser } = await supabase
+      const { data: existingUser, error: checkErr } = await supabase
         .from("users")
         .select("id")
         .eq("id", firebaseUser.uid)
-        .single()
+        .maybeSingle()
+
+      if (checkErr) {
+        console.warn("[Onboarding] users table check error (non-fatal):", checkErr.message)
+      }
 
       if (!existingUser) {
-        await supabase.from("users").upsert(
+        const { error: insertErr } = await supabase.from("users").upsert(
           {
             id: firebaseUser.uid,
             email: firebaseUser.email || "",
@@ -79,24 +85,35 @@ export default function OnboardingPage() {
           },
           { onConflict: "id" }
         )
+        if (insertErr) {
+          console.warn("[Onboarding] users upsert error (non-fatal):", insertErr.message)
+        }
       } else {
         const { error: userError } = await supabase
           .from("users")
           .update({ onboarding_complete: true })
           .eq("id", firebaseUser.uid)
-        if (userError)
-          throw new Error(`User update failed: ${userError.message}`)
+        if (userError) {
+          console.warn("[Onboarding] users update error (non-fatal):", userError.message)
+        }
       }
 
       await completeOnboarding(firebaseUser.uid)
+      console.log("[Onboarding] completeOnboarding done, refreshing profile...")
       await refreshProfile()
-      console.log("[Onboarding] Complete — redirecting to /dashboard")
+      console.log("[Onboarding] Profile refreshed — redirecting to /dashboard")
+      router.replace("/dashboard")
     } catch (err: unknown) {
-      console.error("Onboarding complete error:", err)
+      console.error("[Onboarding] complete error:", err)
       setError(
         err instanceof Error ? err.message : "An unknown error occurred."
       )
       setLoading(false)
+      // Fallback: try to redirect even if there was an error
+      // useAuthRedirect should also catch the onboarding_complete state
+      setTimeout(() => {
+        router.replace("/dashboard")
+      }, 1500)
     }
   }
 

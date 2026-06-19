@@ -17,7 +17,7 @@ export function useAuthRedirect() {
     const doRedirect = (path: string) => {
       if (lastRedirect.current === path) return
       lastRedirect.current = path
-      console.log("[AuthRedirect] Redirecting to:", path)
+      console.log("[AuthRedirect] Redirecting to:", path, "| from:", pathname, "| profile:", profile?.onboarding_complete)
       router.replace(path)
     }
 
@@ -31,12 +31,9 @@ export function useAuthRedirect() {
 
     // Logged in on /login or /signup → redirect based on profile
     if (pathname === "/login" || pathname === "/signup") {
-      // If profile loaded, check onboarding status
       if (profile) {
         doRedirect(profile.onboarding_complete ? "/dashboard" : "/onboarding")
       } else {
-        // Profile failed to load or still loading → go to onboarding anyway
-        // (onboarding page will create the profile if needed)
         doRedirect("/onboarding")
       }
       return
@@ -59,4 +56,13 @@ export function useAuthRedirect() {
   useEffect(() => {
     lastRedirect.current = null
   }, [pathname])
+
+  // Dedicated effect: if profile changes to onboarding_complete while on /onboarding, redirect
+  useEffect(() => {
+    if (loading || !firebaseUser) return
+    if (pathname === "/onboarding" && profile?.onboarding_complete) {
+      console.log("[AuthRedirect] Profile-based redirect: onboarding complete → /dashboard")
+      router.replace("/dashboard")
+    }
+  }, [profile, pathname, loading, firebaseUser, router])
 }

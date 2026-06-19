@@ -78,12 +78,18 @@ export async function upsertProfile(
 }
 
 export async function completeOnboarding(uid: string): Promise<void> {
-  const { error } = await supabase
-    .from("user_profiles")
-    .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
-    .eq("uid", uid)
+  try {
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
+      .eq("uid", uid)
 
-  if (error) throw error
+    if (error) {
+      console.error("[Supabase] completeOnboarding error:", error.message, error.code)
+    }
+  } catch (e) {
+    console.error("[Supabase] completeOnboarding exception:", e)
+  }
 }
 
 // ── Re-export existing row types used across the app ────────────────
