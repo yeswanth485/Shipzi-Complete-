@@ -37,7 +37,7 @@ export function useAuthRedirect() {
     }
 
     // On dashboard but not onboarded
-    if (pathname.startsWith("/dashboard") && !profile?.onboarding_complete) {
+    if (pathname.startsWith("/dashboard") && profile && !profile.onboarding_complete) {
       doRedirect("/onboarding")
       return
     }

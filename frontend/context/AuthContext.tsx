@@ -33,6 +33,15 @@ export function useAuth(): AuthContextType {
   return ctx
 }
 
+function writeAuthCookie(token: string) {
+  const secure = window.location.protocol === "https:" ? "; Secure" : ""
+  document.cookie = `firebase_token=${token}; path=/; max-age=3600; SameSite=Strict${secure}`
+}
+
+function clearAuthCookie() {
+  document.cookie = "firebase_token=; path=/; max-age=0"
+}
+
 async function loadProfile(user: FirebaseUser): Promise<UserProfile> {
   console.log("[Auth] Loading profile for UID:", user.uid)
 
@@ -84,6 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (user) {
         console.log("[Auth] Firebase user detected:", user.uid)
+
+        try {
+          const token = await user.getIdToken()
+          writeAuthCookie(token)
+          console.log("[Auth] Token cookie written")
+        } catch {
+          console.warn("[Auth] Failed to write token cookie")
+        }
+
         try {
           const p = await loadProfile(user)
           if (mountedRef.current) {
@@ -101,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         console.log("[Auth] No Firebase user")
+        clearAuthCookie()
         if (mountedRef.current) {
           setFirebaseUser(null)
           setProfile(null)
@@ -118,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutUser = useCallback(async () => {
     console.log("[Auth] Signing out")
+    clearAuthCookie()
     await signOut(auth)
     setFirebaseUser(null)
     setProfile(null)

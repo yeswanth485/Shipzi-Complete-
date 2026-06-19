@@ -16,14 +16,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/settings")
 
-  const isAuthPage = pathname === "/login" || pathname === "/signup"
-
   if (isProtected && !isAuth) {
     return NextResponse.redirect(new URL("/login", request.url))
-  }
-
-  if (isAuthPage && isAuth) {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
   return NextResponse.next()

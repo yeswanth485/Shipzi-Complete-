@@ -10,7 +10,7 @@ export default function SessionSync() {
         const token = await user.getIdToken()
         const secure = window.location.protocol === "https:" ? "; Secure" : ""
         document.cookie = `firebase_token=${token}; path=/; max-age=3600; SameSite=Strict${secure}`
-        console.log("[SessionSync] Token written to cookie")
+        console.log("[SessionSync] Token refreshed in cookie")
       } else {
         document.cookie = "firebase_token=; path=/; max-age=0"
         console.log("[SessionSync] Cookie cleared")
