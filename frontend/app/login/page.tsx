@@ -49,10 +49,17 @@ export default function LoginPage() {
   useEffect(() => {
     if (isLoading) return // Wait for Firebase to resolve
 
-    if (firebaseUser && userData) {
-      if (userData.onboarding_complete) {
-        router.replace('/dashboard')
+    if (firebaseUser) {
+      if (userData) {
+        // UserContext loaded Supabase data — route based on onboarding
+        if (userData.onboarding_complete) {
+          router.replace('/dashboard')
+        } else {
+          router.replace('/onboarding')
+        }
       } else {
+        // Firebase auth works but Supabase data didn't load.
+        // Still send to onboarding — it will create the row there.
         router.replace('/onboarding')
       }
     }
@@ -100,8 +107,8 @@ export default function LoginPage() {
     }
   }
 
-  // Loading state
-  if (isLoading || loading) {
+  // Loading state — only block while actively processing (not during initial load)
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"

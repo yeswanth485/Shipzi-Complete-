@@ -74,10 +74,15 @@ export default function SignupPage() {
   useEffect(() => {
     if (isLoading) return
 
-    if (firebaseUser && userData) {
-      if (userData.onboarding_complete) {
-        router.replace('/dashboard')
+    if (firebaseUser) {
+      if (userData) {
+        if (userData.onboarding_complete) {
+          router.replace('/dashboard')
+        } else {
+          router.replace('/onboarding')
+        }
       } else {
+        // Firebase auth works but Supabase data didn't load — go to onboarding
         router.replace('/onboarding')
       }
     }
@@ -155,8 +160,8 @@ export default function SignupPage() {
     }
   }
 
-  // Loading state
-  if (isLoading || loading) {
+  // Loading state — only block while actively processing
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"

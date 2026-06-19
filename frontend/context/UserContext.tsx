@@ -129,7 +129,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('[UserContext] Setting up onAuthStateChanged listener')
 
+    // SAFETY: If onAuthStateChanged never fires (Firebase misconfigured),
+    // force isLoading to false after 5 seconds so the UI isn't stuck.
+    const safetyTimeout = setTimeout(() => {
+      setIsLoading(prev => {
+        if (prev) {
+          console.warn('[UserContext] Safety timeout: onAuthStateChanged did not fire. Forcing isLoading=false.')
+          return false
+        }
+        return prev
+      })
+    }, 5000)
+
     const unsub = onAuthStateChanged(auth, async (user) => {
+      clearTimeout(safetyTimeout)
       console.log('[UserContext] onAuthStateChanged fired, user:', user ? user.uid : 'null')
       setFirebaseUser(user)
 
