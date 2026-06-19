@@ -35,15 +35,13 @@ export default function LoginPage() {
   useEffect(() => {
     if (!isLoading && firebaseUser) {
       console.log('[LoginPage] User already authenticated, checking onboarding status')
-      // userData may still be loading — wait for it
-      if (userData !== null) {
-        if (userData.onboarding_complete) {
-          console.log('[LoginPage] Onboarding complete, redirecting to /dashboard')
-          router.replace('/dashboard')
-        } else {
-          console.log('[LoginPage] Onboarding incomplete, redirecting to /onboarding')
-          router.replace('/onboarding')
-        }
+      
+      if (userData?.onboarding_complete) {
+        console.log('[LoginPage] Onboarding complete, redirecting to /dashboard')
+        router.replace('/dashboard')
+      } else {
+        console.log('[LoginPage] Onboarding incomplete (or user row missing), redirecting to /onboarding')
+        router.replace('/onboarding')
       }
     }
   }, [isLoading, firebaseUser, userData, router])

@@ -4,6 +4,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import type { UserRow } from '@/lib/supabase'
+import { setAuthCookie, clearAuthCookies } from '@/lib/auth-cookies'
 
 interface UserContextType {
   firebaseUser: FirebaseUser | null
@@ -122,12 +123,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setFirebaseUser(user)
 
       if (user) {
+        setAuthCookie(user.uid)
         try {
           await fetchUserData(user)
         } catch (e) {
           console.error('[UserContext] fetchUserData failed:', e)
         }
       } else {
+        clearAuthCookies()
         setUserData(null)
       }
 

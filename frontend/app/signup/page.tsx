@@ -7,6 +7,7 @@ import { createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, ge
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import { setAuthCookie } from '@/lib/auth-cookies'
+import { useUser } from '@/context/UserContext'
 
 interface FormData {
   fullName: string; email: string; password: string
@@ -18,6 +19,7 @@ function setAuthCookieLocal(uid: string) { setAuthCookie(uid) }
 
 export default function SignupPage() {
   const router = useRouter()
+  const { firebaseUser, userData, isLoading } = useUser()
   const [form, setForm] = useState<FormData>({
     fullName: '', email: '', password: '', confirmPassword: '', companyName: '', agreeTerms: false,
   })
@@ -25,6 +27,16 @@ export default function SignupPage() {
   const [loading,      setLoading]      = useState(false)
   const [errors,       setErrors]       = useState<Errors>({})
   const [serverError,  setServerError]  = useState('')
+
+  useEffect(() => {
+    if (!isLoading && firebaseUser) {
+      if (userData?.onboarding_complete) {
+        router.replace('/dashboard')
+      } else {
+        router.replace('/onboarding')
+      }
+    }
+  }, [isLoading, firebaseUser, userData, router])
 
   const validate = (): boolean => {
     const e: Errors = {}
