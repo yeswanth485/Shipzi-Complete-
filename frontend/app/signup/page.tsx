@@ -3,134 +3,177 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createUserWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
+import {
+  createUserWithEmailAndPassword,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider,
+  updateProfile,
+} from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
-import { setAuthCookie } from '@/lib/auth-cookies'
 import { useUser } from '@/context/UserContext'
-
-interface FormData {
-  fullName: string; email: string; password: string
-  confirmPassword: string; companyName: string; agreeTerms: boolean
-}
-interface Errors { fullName?: string; email?: string; password?: string; confirmPassword?: string; companyName?: string; agreeTerms?: string }
 
 export default function SignupPage() {
   const router = useRouter()
   const { firebaseUser, userData, isLoading } = useUser()
-  const [form, setForm] = useState<FormData>({
-    fullName: '', email: '', password: '', confirmPassword: '', companyName: '', agreeTerms: false,
-  })
-  const [showPwd,      setShowPwd]      = useState(false)
-  const [loading,      setLoading]      = useState(false)
-  const [errors,       setErrors]       = useState<Errors>({})
-  const [serverError,  setServerError]  = useState('')
 
-  const redirectChecked = useRef(false)
+  const [fullName, setFullName]         = useState('')
+  const [email, setEmail]               = useState('')
+  const [password, setPassword]         = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [companyName, setCompanyName]   = useState('')
+  const [agreeTerms, setAgreeTerms]     = useState(false)
+  const [showPwd, setShowPwd]           = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
 
-  // Effect 1: Handle Google redirect result — runs ONCE on mount
+  const redirectHandled = useRef(false)
+
+  // Handle Google redirect result (runs once on mount)
   useEffect(() => {
-    if (redirectChecked.current) return
-    redirectChecked.current = true
+    if (redirectHandled.current) return
+    redirectHandled.current = true
 
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        const uid = result.user.uid
-        setAuthCookie(uid)
-        const { data, error: supaErr } = await supabase
-          .from('users')
-          .select('onboarding_complete')
-          .eq('id', uid)
-          .single()
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          setLoading(true)
+          const uid = result.user.uid
 
-        if (supaErr) {
-          console.warn('[SignupPage] Supabase query error, treating as new user:', supaErr.message)
-          router.push('/onboarding')
-          return
+          // Check if user already has a row in Supabase
+          const { data } = await supabase
+            .from('users')
+            .select('onboarding_complete')
+            .eq('id', uid)
+            .single()
+
+          // If no row exists, create one (new Google user)
+          if (!data) {
+            await supabase.from('users').upsert({
+              id: uid,
+              email: result.user.email || '',
+              full_name: result.user.displayName || '',
+              avatar_url: result.user.photoURL || '',
+              onboarding_complete: false,
+            }, { onConflict: 'id' })
+          }
+
+          // UserContext.onAuthStateChanged already fired → cookie is set.
+          // The redirect effect below will handle routing.
         }
+      })
+      .catch((err) => {
+        console.error('[Signup] Google redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+        setLoading(false)
+      })
+  }, [])
 
-        if (data?.onboarding_complete) {
-          router.replace('/dashboard')
-        } else {
-          router.push('/onboarding')
-        }
+  // Redirect based on auth state
+  useEffect(() => {
+    if (isLoading) return
+
+    if (firebaseUser && userData) {
+      if (userData.onboarding_complete) {
+        router.replace('/dashboard')
+      } else {
+        router.replace('/onboarding')
       }
-    }).catch((err: any) => {
-      console.error('[SignupPage] Redirect error:', err)
-      setServerError('Google sign-in failed. Please try again.')
-      setLoading(false)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Effect 2: Redirect already-logged-in users
-  useEffect(() => {
-    if (firebaseUser && userData?.onboarding_complete) {
-      router.replace('/dashboard')
     }
-  }, [firebaseUser, userData, router])
+  }, [isLoading, firebaseUser, userData, router])
 
+  // Validate form
   const validate = (): boolean => {
-    const e: Errors = {}
-    if (!form.fullName.trim())        e.fullName        = 'Full name is required'
-    if (!form.email.includes('@'))    e.email           = 'Valid email required'
-    if (form.password.length < 8)     e.password        = 'Min 8 characters'
-    if (!/\d/.test(form.password))    e.password        = 'Must include a number'
-    if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match'
-    if (!form.companyName.trim())     e.companyName     = 'Company name required'
-    if (!form.agreeTerms)             e.agreeTerms      = 'You must accept the terms'
-    setErrors(e)
-    return Object.keys(e).length === 0
+    if (!fullName.trim()) { setError('Full name is required.'); return false }
+    if (!email.includes('@')) { setError('Valid email required.'); return false }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return false }
+    if (!/\d/.test(password)) { setError('Password must include a number.'); return false }
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return false }
+    if (!companyName.trim()) { setError('Company name is required.'); return false }
+    if (!agreeTerms) { setError('You must accept the terms.'); return false }
+    return true
   }
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  // Email + password signup
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
-    setLoading(true); setServerError('')
+
+    setLoading(true)
+    setError('')
+
     try {
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
+      const cred = await createUserWithEmailAndPassword(auth, email, password)
+
+      // Update display name
+      if (fullName) {
+        await updateProfile(cred.user, { displayName: fullName })
+      }
+
+      // Create user row in Supabase
       const { error: insertErr } = await supabase.from('users').upsert({
-        id:                  cred.user.uid,
-        email:               form.email,
-        full_name:           form.fullName,
+        id: cred.user.uid,
+        email: email,
+        full_name: fullName,
+        avatar_url: '',
         onboarding_complete: false,
       }, { onConflict: 'id' })
+
       if (insertErr) {
-        console.warn('[SignupPage] Supabase upsert error (non-fatal):', insertErr.message)
+        console.error('[Signup] Supabase insert error:', insertErr)
+        // Continue anyway — UserContext will retry on next auth state change
       }
-      setAuthCookie(cred.user.uid)
-      router.push('/onboarding')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : ''
-      const code = (err as any)?.code || ''
-      if (code === 'auth/email-already-in-use' || msg.includes('email-already-in-use')) {
-        setServerError('This email is already registered — please sign in instead.')
-      } else if (code === 'auth/weak-password' || msg.includes('weak-password')) {
-        setServerError('Password must be at least 6 characters.')
+
+      // Auth cookie is set by UserContext.onAuthStateChanged.
+      // Redirect effect above will handle routing to /onboarding.
+    } catch (err: any) {
+      const code = err?.code || ''
+      if (code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please sign in instead.')
+      } else if (code === 'auth/weak-password') {
+        setError('Password must be at least 6 characters.')
+      } else if (code === 'auth/invalid-email') {
+        setError('Invalid email address.')
       } else {
-        setServerError('Sign up failed. Please try again.')
+        setError('Sign up failed. Please try again.')
       }
       setLoading(false)
     }
   }
 
+  // Google signup via redirect
   const handleGoogle = async () => {
-    setLoading(true); setServerError('')
+    setLoading(true)
+    setError('')
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
-      console.error('[SignupPage] Google sign-up error:', err)
-      setServerError(err.message || 'Google sign-up failed')
+      console.error('[Signup] Google sign-up error:', err)
+      setError('Failed to start Google sign-in.')
       setLoading(false)
     }
   }
 
-  const field = (key: keyof FormData) => ({
-    value: form[key] as string,
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm(f => ({ ...f, [key]: e.target.value }))
-      setErrors(prev => ({ ...prev, [key]: undefined }))
-    },
-  })
+  // Loading state
+  if (isLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
+        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
+      </div>
+    )
+  }
+
+  // Already logged in — wait for redirect
+  if (firebaseUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
+        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
+          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
@@ -145,30 +188,34 @@ export default function SignupPage() {
             <h1 className="font-syne text-3xl font-bold text-white mb-2">Create your account</h1>
             <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>Start optimizing shipments in minutes</p>
 
-            {serverError && (
+            {error && (
               <div className="mb-5 p-4 rounded-xl text-sm"
                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--accent-danger)' }}>
-                {serverError}
+                {error}
               </div>
             )}
 
-            <form onSubmit={handleSignUp} className="space-y-4">
-              {([
-                { label: 'Full Name',    key: 'fullName',    type: 'text',     ph: 'John Smith'         },
-                { label: 'Work Email',   key: 'email',       type: 'email',    ph: 'you@company.com'    },
-                { label: 'Company Name', key: 'companyName', type: 'text',     ph: 'Acme Logistics'     },
-              ] as const).map(f => (
-                <div key={f.key}>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>{f.label}</label>
-                  <input type={f.type} {...field(f.key)} className="input-dark" placeholder={f.ph} />
-                  {errors[f.key] && <p className="text-xs mt-1" style={{ color: 'var(--accent-danger)' }}>{errors[f.key]}</p>}
-                </div>
-              ))}
-
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Full Name</label>
+                <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)}
+                  className="input-dark" placeholder="John Smith" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Work Email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  className="input-dark" placeholder="you@company.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Company Name</label>
+                <input type="text" required value={companyName} onChange={e => setCompanyName(e.target.value)}
+                  className="input-dark" placeholder="Acme Logistics" />
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Password</label>
                 <div className="relative">
-                  <input type={showPwd ? 'text' : 'password'} {...field('password')}
+                  <input type={showPwd ? 'text' : 'password'} required value={password}
+                    onChange={e => setPassword(e.target.value)}
                     className="input-dark" placeholder="Min 8 chars + number" style={{ paddingRight: 44 }} />
                   <button type="button" onClick={() => setShowPwd(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
@@ -176,28 +223,24 @@ export default function SignupPage() {
                     {showPwd ? '🙈' : '👁'}
                   </button>
                 </div>
-                {errors.password && <p className="text-xs mt-1" style={{ color: 'var(--accent-danger)' }}>{errors.password}</p>}
               </div>
-
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Confirm Password</label>
-                <input type="password" {...field('confirmPassword')} className="input-dark" placeholder="••••••••" />
-                {errors.confirmPassword && <p className="text-xs mt-1" style={{ color: 'var(--accent-danger)' }}>{errors.confirmPassword}</p>}
+                <input type="password" required value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  className="input-dark" placeholder="••••••••" />
               </div>
-
               <div>
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={form.agreeTerms}
-                    onChange={e => setForm(f => ({ ...f, agreeTerms: e.target.checked }))}
+                  <input type="checkbox" checked={agreeTerms}
+                    onChange={e => setAgreeTerms(e.target.checked)}
                     style={{ accentColor: 'var(--accent-primary)', marginTop: 2 }} />
                   <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                     I agree to the <a href="#" style={{ color: 'var(--accent-secondary)' }}>Terms</a> and{' '}
                     <a href="#" style={{ color: 'var(--accent-secondary)' }}>Privacy Policy</a>
                   </span>
                 </label>
-                {errors.agreeTerms && <p className="text-xs mt-1" style={{ color: 'var(--accent-danger)' }}>{errors.agreeTerms}</p>}
               </div>
-
               <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
                 {loading
                   ? <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

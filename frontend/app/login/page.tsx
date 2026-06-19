@@ -5,91 +5,70 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
-  updateProfile,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { supabase } from '@/lib/supabase'
-import { setAuthCookie, setOnboardingComplete } from '@/lib/auth-cookies'
 import { useUser } from '@/context/UserContext'
 
 export default function LoginPage() {
   const router = useRouter()
   const { firebaseUser, userData, isLoading } = useUser()
 
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd]   = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  const redirectChecked = useRef(false)
+  const redirectHandled = useRef(false)
 
-  const handlePostAuth = async (uid: string) => {
-    setAuthCookie(uid)
+  // Handle Google redirect result (runs once on mount)
+  useEffect(() => {
+    if (redirectHandled.current) return
+    redirectHandled.current = true
 
-    try {
-      const { data, error: supaErr } = await supabase
-        .from('users')
-        .select('onboarding_complete')
-        .eq('id', uid)
-        .single()
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          // Firebase auth succeeded via redirect.
+          // UserContext.onAuthStateChanged will fire → sets cookie + fetches Supabase data.
+          // The redirect effect below will handle routing.
+          setLoading(true)
+        }
+      })
+      .catch((err) => {
+        console.error('[Login] Google redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+        setLoading(false)
+      })
+  }, [])
 
-      if (supaErr) {
-        console.warn('[LoginPage] Supabase query error, treating as new user:', supaErr.message)
-        router.push('/onboarding')
-        return
-      }
+  // Redirect based on auth state (UserContext handles cookie + Supabase)
+  useEffect(() => {
+    if (isLoading) return // Wait for Firebase to resolve
 
-      if (data?.onboarding_complete) {
-        setOnboardingComplete()
-        router.push('/dashboard')
+    if (firebaseUser && userData) {
+      if (userData.onboarding_complete) {
+        router.replace('/dashboard')
       } else {
-        router.push('/onboarding')
+        router.replace('/onboarding')
       }
-    } catch (err) {
-      console.error('[LoginPage] handlePostAuth unexpected error:', err)
-      router.push('/onboarding')
     }
-  }
+  }, [isLoading, firebaseUser, userData, router])
 
-  // Effect 1: Handle Google redirect result — runs ONCE on mount
-  useEffect(() => {
-    if (redirectChecked.current) return
-    redirectChecked.current = true
-
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        setLoading(true)
-        await handlePostAuth(result.user.uid)
-      }
-    }).catch((err) => {
-      console.error('[LoginPage] Redirect result error:', err)
-      setError('Google sign-in failed. Please try again.')
-      setLoading(false)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Effect 2: Redirect already-logged-in users
-  useEffect(() => {
-    if (firebaseUser && userData?.onboarding_complete) {
-      router.push('/dashboard')
-    }
-  }, [firebaseUser, userData, router])
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  // Email + password login
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
+
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password)
-      await handlePostAuth(cred.user.uid)
+      await signInWithEmailAndPassword(auth, email, password)
+      // Success → onAuthStateChanged fires → UserContext sets cookie + fetches data
+      // → redirect effect above handles routing
     } catch (err: any) {
-      console.error('[LoginPage] Email login error:', err)
       const code = err?.code || ''
       if (code === 'auth/user-not-found') {
         setError('No account found with this email. Please sign up first.')
@@ -99,57 +78,30 @@ export default function LoginPage() {
         setError('Invalid email address.')
       } else if (code === 'auth/too-many-requests') {
         setError('Too many failed attempts. Please try again later.')
+      } else if (code === 'auth/invalid-credential') {
+        setError('Invalid email or password. Please try again.')
       } else {
-        setError('Login failed. Please check your credentials and try again.')
+        setError('Login failed. Please try again.')
       }
       setLoading(false)
     }
   }
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true); setError('')
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password)
-      if (name) {
-        await updateProfile(cred.user, { displayName: name })
-      }
-      const { error: insertErr } = await supabase.from('users').upsert({
-        id: cred.user.uid,
-        email: email,
-        full_name: name,
-        avatar_url: '',
-        onboarding_complete: false,
-      }, { onConflict: 'id' })
-      if (insertErr) {
-        console.warn('[LoginPage] Supabase upsert error (non-fatal):', insertErr.message)
-      }
-      await handlePostAuth(cred.user.uid)
-    } catch (err: any) {
-      const msg = err.message || 'Registration failed'
-      if (msg.includes('email-already-in-use')) {
-        setError('This email is already registered. Please sign in instead.')
-      } else if (msg.includes('weak-password')) {
-        setError('Password must be at least 6 characters.')
-      } else {
-        setError(`Registration failed: ${msg}`)
-      }
-      setLoading(false)
-    }
-  }
-
+  // Google login via redirect
   const handleGoogle = async () => {
-    setLoading(true); setError('')
+    setLoading(true)
+    setError('')
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
-      console.error('[LoginPage] Google sign-in error:', err)
-      setError(err.message || 'Google sign-in failed')
+      console.error('[Login] Google sign-in error:', err)
+      setError('Failed to start Google sign-in.')
       setLoading(false)
     }
   }
 
-  if (isLoading) {
+  // Loading state
+  if (isLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
         <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
@@ -158,6 +110,7 @@ export default function LoginPage() {
     )
   }
 
+  // Already logged in — wait for redirect
   if (firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
@@ -169,7 +122,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
-      {/* Form panel */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-10">
@@ -178,12 +130,8 @@ export default function LoginPage() {
           </div>
 
           <div className="glass-card p-8">
-            <h1 className="font-syne text-3xl font-bold text-white mb-2">
-              {mode === 'login' ? 'Welcome back' : 'Create your account'}
-            </h1>
-            <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>
-              {mode === 'login' ? 'Sign in to your Shipzi workspace' : 'Start optimizing your shipments today'}
-            </p>
+            <h1 className="font-syne text-3xl font-bold text-white mb-2">Welcome back</h1>
+            <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>Sign in to your Shipzi workspace</p>
 
             {error && (
               <div className="mb-5 p-4 rounded-xl text-sm"
@@ -192,14 +140,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form onSubmit={mode === 'login' ? handleEmailLogin : handleRegister} className="space-y-5">
-              {mode === 'register' && (
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Full Name</label>
-                  <input type="text" required value={name} onChange={e => setName(e.target.value)}
-                    className="input-dark" placeholder="John Doe" />
-                </div>
-              )}
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Email</label>
                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
@@ -217,17 +158,11 @@ export default function LoginPage() {
                     {showPwd ? '🙈' : '👁'}
                   </button>
                 </div>
-                {mode === 'login' && (
-                  <div className="text-right mt-1">
-                    <a href="#" className="text-xs" style={{ color: 'var(--accent-secondary)' }}>Forgot password?</a>
-                  </div>
-                )}
               </div>
-
               <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ padding: 14 }}>
                 {loading
                   ? <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  : mode === 'login' ? 'Sign In' : 'Register'}
+                  : 'Sign In'}
               </button>
             </form>
 
@@ -250,27 +185,13 @@ export default function LoginPage() {
             </button>
 
             <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>
-              {mode === 'login' ? (
-                <>No account?{' '}
-                  <button onClick={() => { setMode('register'); setError('') }}
-                    style={{ color: 'var(--accent-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>
-                    Register
-                  </button>
-                </>
-              ) : (
-                <>Already have an account?{' '}
-                  <button onClick={() => { setMode('login'); setError('') }}
-                    style={{ color: 'var(--accent-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>
-                    Sign In
-                  </button>
-                </>
-              )}
+              No account?{' '}
+              <Link href="/signup" style={{ color: 'var(--accent-secondary)' }}>Register</Link>
             </p>
           </div>
         </div>
       </div>
 
-      {/* Visual panel */}
       <div className="hidden lg:flex flex-1 items-center justify-center"
         style={{ background: 'linear-gradient(135deg,rgba(37,99,235,0.08) 0%,rgba(6,182,212,0.05) 100%)' }}>
         <div className="text-center p-12 max-w-sm">
