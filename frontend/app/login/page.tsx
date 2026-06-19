@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   signInWithEmailAndPassword,
   signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
@@ -21,8 +22,23 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
+  // Process any pending OAuth redirect result. This MUST be called to complete
+  // a signInWithRedirect flow — without it, Firebase never signs the user in.
+  // CRITICAL: Do NOT setLoading(true) here — that creates a race where loading=true
+  // but firebaseUser=null, trapping the component in the spinner with no redirect.
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(() => {
+        // Redirect processed. onAuthStateChanged will fire and UserContext handles
+        // the cookie + Supabase fetch. The redirect effect below handles routing.
+      })
+      .catch((err) => {
+        console.error('[Login] Google redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+      })
+  }, [])
+
   // Redirect when Firebase + Supabase are both resolved.
-  // onAuthStateChanged in UserContext handles everything (cookie + Supabase fetch).
   useEffect(() => {
     if (isLoading) return
 
@@ -34,7 +50,6 @@ export default function LoginPage() {
           router.replace('/onboarding')
         }
       } else {
-        // Firebase auth works but Supabase row didn't load — try onboarding
         router.replace('/onboarding')
       }
     }

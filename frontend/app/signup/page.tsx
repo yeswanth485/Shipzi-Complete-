@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   createUserWithEmailAndPassword,
   signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   updateProfile,
 } from 'firebase/auth'
@@ -27,8 +28,21 @@ export default function SignupPage() {
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
 
+  // Process any pending OAuth redirect result. MUST be called to complete
+  // a signInWithRedirect flow. Do NOT setLoading(true) here.
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(() => {
+        // Redirect processed. onAuthStateChanged fires → UserContext handles
+        // cookie + Supabase fetch (including auto-creating user row if missing).
+      })
+      .catch((err) => {
+        console.error('[Signup] Google redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+      })
+  }, [])
+
   // Redirect when Firebase + Supabase are both resolved.
-  // onAuthStateChanged in UserContext handles everything (cookie + Supabase fetch).
   useEffect(() => {
     if (isLoading) return
 
