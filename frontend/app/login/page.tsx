@@ -7,7 +7,6 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
-  signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
   updateProfile,
@@ -29,106 +28,39 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  // If the user is already authenticated, redirect them away from login.
-  // This runs AFTER Firebase has restored the session (isLoading=false),
-  // so we know the auth state is definitive.
   useEffect(() => {
-    if (!isLoading && firebaseUser) {
-      console.log('[LoginPage] User already authenticated, checking onboarding status')
-      
-      if (userData?.onboarding_complete) {
-        console.log('[LoginPage] Onboarding complete, redirecting to /dashboard')
-        router.replace('/dashboard')
-      } else {
-        console.log('[LoginPage] Onboarding incomplete (or user row missing), redirecting to /onboarding')
-        router.replace('/onboarding')
-      }
+    if (firebaseUser && userData?.onboarding_complete) {
+      router.push('/dashboard')
     }
-  }, [isLoading, firebaseUser, userData, router])
+  }, [firebaseUser, userData, router])
 
-  /**
-   * After a successful auth event (email login, register, or Google),
-   * this function:
-   * 1. Sets the auth cookie so middleware allows /dashboard access
-   * 2. Checks Supabase for onboarding_complete flag
-   * 3. Redirects to the correct destination
-   */
-  const handlePostAuth = async (uid: string, isNew = false) => {
-    console.log('[LoginPage] handlePostAuth uid:', uid, 'isNew:', isNew)
-
-    // Set the auth cookie BEFORE any redirect so middleware passes the request
+  const handlePostAuth = async (uid: string) => {
     setAuthCookie(uid)
 
-    if (isNew) {
-      console.log('[LoginPage] New user → /onboarding')
-      router.push('/onboarding')
-      return
-    }
-
-    // Existing user: check their onboarding status from Supabase
-    const { data, error: supaErr } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('onboarding_complete')
       .eq('id', uid)
       .single()
 
-    console.log('[LoginPage] Supabase onboarding check:', { data, supaErr })
-
-    if (supaErr) {
-      // If we can't fetch the user row, treat as new (send to onboarding)
-      console.warn('[LoginPage] Could not fetch user row, defaulting to /onboarding:', supaErr)
-      router.push('/onboarding')
-      return
-    }
-
     if (data?.onboarding_complete) {
       setOnboardingComplete()
-      console.log('[LoginPage] onboarding_complete=true → /dashboard')
       router.push('/dashboard')
     } else {
-      console.log('[LoginPage] onboarding_complete=false → /onboarding')
       router.push('/onboarding')
     }
   }
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
-      console.log('[LoginPage] Email login attempt for:', email)
       const cred = await signInWithEmailAndPassword(auth, email, password)
-      console.log('[LoginPage] Firebase sign-in success, uid:', cred.user.uid)
-
-      // Check if the user exists in Supabase
-      const { data: existing, error: fetchErr } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', cred.user.uid)
-        .single()
-
-      if (fetchErr && fetchErr.code !== 'PGRST116') {
-        console.error('[LoginPage] Supabase fetch error:', fetchErr)
-      }
-
-      // If user doesn't exist in Supabase, create them
-      if (!existing) {
-        await supabase.from('users').upsert({
-          id: cred.user.uid,
-          email: cred.user.email || email,
-          full_name: cred.user.displayName || '',
-          avatar_url: cred.user.photoURL || '',
-          onboarding_complete: false,
-        }, { onConflict: 'id' })
-      }
-
-      await handlePostAuth(cred.user.uid, !existing)
+      await handlePostAuth(cred.user.uid)
     } catch (err: any) {
-      console.error('[LoginPage] Email login error:', err)
       setError('Invalid email or password. Please try again.')
       setLoading(false)
     }
-    // Note: don't setLoading(false) on success — page is navigating away
   }
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -147,7 +79,7 @@ export default function LoginPage() {
         avatar_url: '',
         onboarding_complete: false,
       }, { onConflict: 'id' })
-      await handlePostAuth(cred.user.uid, true)
+      await handlePostAuth(cred.user.uid)
     } catch (err: any) {
       const msg = err.message || 'Registration failed'
       if (msg.includes('email-already-in-use')) {
@@ -163,58 +95,22 @@ export default function LoginPage() {
   }
 
   const handleGoogle = async () => {
+    setLoading(true); setError('')
     try {
-      const provider = new GoogleAuthProvider()
-      let result
-      try {
-        result = await signInWithPopup(auth, provider)
-      } catch (popupErr: any) {
-        if (
-          popupErr?.code === 'auth/popup-blocked' ||
-          popupErr?.code === 'auth/popup-closed-by-user' ||
-          popupErr?.code === 'auth/cancelled-popup-request'
-        ) {
-          throw new Error('Please allow popups for this site to sign in with Google.')
-        }
-        throw popupErr
-      }
-
-      setLoading(true)
-      setError('')
-
-      const uid = result.user.uid
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id, onboarding_complete')
-        .eq('id', uid)
-        .single()
-
-      await handlePostAuth(uid, !existing)
+      const result = await signInWithPopup(auth, new GoogleAuthProvider())
+      await handlePostAuth(result.user.uid)
     } catch (err: any) {
-      console.error('[LoginPage] Google sign-in error:', err)
-      if (err.message && err.message.includes('popups')) {
-        setError(err.message)
-      } else {
-        setError('Google sign-in failed. Please try again or use email sign-in.')
-      }
+      console.error('Google sign-in error:', err)
+      setError(err.message || 'Google sign-in failed')
       setLoading(false)
     }
-    // Note: don't setLoading(false) on success — page is navigating away
   }
 
-  // Handle Google redirect result on page load
   useEffect(() => {
     getRedirectResult(auth).then(async (result) => {
       if (result?.user) {
-        console.log('[LoginPage] Google redirect result, uid:', result.user.uid)
         setLoading(true)
-        const uid = result.user.uid
-        const { data: existing } = await supabase
-          .from('users')
-          .select('id, onboarding_complete')
-          .eq('id', uid)
-          .single()
-        await handlePostAuth(uid, !existing)
+        await handlePostAuth(result.user.uid)
       }
     }).catch((err) => {
       console.error('[LoginPage] Redirect result error:', err)
