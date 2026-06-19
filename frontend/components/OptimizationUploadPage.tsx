@@ -105,6 +105,7 @@ export default function OptimizationUploadPage() {
         company_id: companyId,
         status: 'processing'
       }).select('id').single();
+      if (!runData) throw new Error('Failed to create optimization run');
       const runId = runData.id;
 
       const token = await firebaseUser?.getIdToken()
