@@ -1,87 +1,72 @@
-import { createClient } from '@supabase/supabase-js'
-import type { CatalogBox, OptimizedOrderRow } from './types'
+import { createClient } from "@supabase/supabase-js"
+import type { CatalogBox, OptimizedOrderRow } from "./types"
 
-// BUG-007 FIX: Build-safe Supabase initialization
-// During Vercel build, env vars may not be available.
-// We only create a real client when both URL and key are present.
-// Otherwise, we use a plain no-op object that never throws.
-
-// Helper: creates a plain no-op client (no createClient call, no Proxy)
-// Used when env vars are missing during build or when createClient throws
-function createNoopClient() {
-  if (typeof window !== 'undefined') {
-    console.warn('[Shipzi] Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.')
-  }
-  const NOOP_RESULT = { data: null, error: null, count: null }
-
-  // Proxy-based chainable: any method call returns itself (for chaining)
-  // and it's thenable so `await supabase.from('x').select().eq(...)` resolves to NOOP_RESULT
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function makeChainable(): any {
-    return new Proxy(function () {}, {
-      get(_target, prop) {
-        if (prop === 'then') {
-          // Make the chainable thenable so `await` resolves to NOOP_RESULT
-          return (resolve: (v: unknown) => void) => resolve(NOOP_RESULT)
-        }
-        if (prop === Symbol.toPrimitive) return () => ''
-        if (prop === Symbol.iterator) return undefined
-        // Any method call returns another chainable for further chaining
-        return (..._args: unknown[]) => makeChainable()
-      },
-      apply(_target, _thisArg, _args) {
-        return makeChainable()
-      },
-    })
-  }
-
-  return {
-    from: (_table?: string) => makeChainable(),
-    channel: (_name?: string) => ({
-      on: (_event?: string, _filter?: object, _callback?: Function) => ({
-        subscribe: () => ({}),
-      }),
-    }),
-    removeChannel: (_channel?: unknown) => Promise.resolve({ error: null }),
-    storage: {
-      from: (_bucket?: string) => ({
-        upload: (_path?: string, _file?: unknown, _opts?: object) => Promise.resolve({ data: null, error: null }),
-        getPublicUrl: (_path?: string) => ({ data: { publicUrl: '' } }),
-        list: (_prefix?: string) => Promise.resolve({ data: [], error: null }),
-        remove: (_paths?: string[]) => Promise.resolve({ data: null, error: null }),
-      }),
-    },
-    rpc: (_fn?: string, _params?: object) => Promise.resolve({ data: null, error: null, count: null }),
-    auth: {
-      signOut: () => Promise.resolve({ error: null }),
-      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-      onAuthStateChanged: (_cb?: Function) => () => {},
-    },
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let supabase: any
-
-try {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (url && key) {
-    supabase = createClient(url, key)
-  } else {
-    supabase = createNoopClient()
-  }
-} catch (e) {
-  // Safety net: if createClient throws (e.g. invalid URL), use no-op
-  console.warn('[Shipzi] Supabase init failed:', e)
-  supabase = createNoopClient()
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export { supabase }
 
-// ── Re-export DB row types used across the app ────────────────────
 export type { CatalogBox, OptimizedOrderRow }
+
+export interface UserProfile {
+  uid: string
+  email: string
+  display_name: string | null
+  photo_url: string | null
+  onboarding_complete: boolean
+  created_at: string
+  updated_at: string
+}
+
+export async function getProfile(uid: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("uid", uid)
+    .maybeSingle()
+
+  if (error) throw error
+  return data as UserProfile | null
+}
+
+export async function upsertProfile(
+  uid: string,
+  email: string,
+  displayName: string | null,
+  photoUrl: string | null
+): Promise<UserProfile> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .upsert(
+      {
+        uid,
+        email,
+        display_name: displayName,
+        photo_url: photoUrl,
+        updated_at: now,
+      },
+      { onConflict: "uid", ignoreDuplicates: false }
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as UserProfile
+}
+
+export async function completeOnboarding(uid: string): Promise<void> {
+  const { error } = await supabase
+    .from("user_profiles")
+    .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
+    .eq("uid", uid)
+
+  if (error) throw error
+}
+
+// ── Re-export existing row types used across the app ────────────────
 
 export interface CompanyRow {
   id: string
@@ -118,7 +103,7 @@ export interface OptimizationRunRow {
   total_products: number | null
   total_savings_usd: number | null
   avg_utilization_pct: number | null
-  status: 'pending' | 'processing' | 'complete' | 'failed'
+  status: "pending" | "processing" | "complete" | "failed"
   created_at: string
 }
 
@@ -162,7 +147,7 @@ export interface SustainabilityMetricRow {
 export interface SubscriptionRow {
   id: string
   company_id: string
-  plan: 'free' | 'growth' | 'enterprise'
+  plan: "free" | "growth" | "enterprise"
   status: string
   monthly_shipment_limit: number | null
   current_usage: number

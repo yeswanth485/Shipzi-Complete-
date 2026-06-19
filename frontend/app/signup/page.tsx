@@ -1,22 +1,19 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import {
   createUserWithEmailAndPassword,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   updateProfile,
 } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { auth, googleProvider } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/context/UserContext'
 
 export default function SignupPage() {
-  const router = useRouter()
-  const { firebaseUser, userData, isLoading } = useUser()
+  const { firebaseUser } = useUser()
 
   const [fullName, setFullName]         = useState('')
   const [email, setEmail]               = useState('')
@@ -27,63 +24,7 @@ export default function SignupPage() {
   const [showPwd, setShowPwd]           = useState(false)
   const [submitting, setSubmitting]     = useState(false)
   const [error, setError]               = useState('')
-
-  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Process any pending OAuth redirect result.
-  useEffect(() => {
-    console.log('[Signup] getRedirectResult called')
-    getRedirectResult(auth)
-      .then((result) => {
-        console.log('[Signup] getRedirectResult resolved:', result ? 'has result' : 'null')
-      })
-      .catch((err) => {
-        console.error('[Signup] Google redirect error:', err)
-        setError('Google sign-in failed. Please try again.')
-      })
-  }, [])
-
-  // Redirect when Firebase + Supabase are both resolved.
-  useEffect(() => {
-    console.log('[Signup] redirect effect: isLoading=%s firebaseUser=%s userData=%s',
-      isLoading, firebaseUser ? firebaseUser.uid.substring(0, 8) : 'null',
-      userData ? `onboarding=${userData.onboarding_complete}` : 'null')
-
-    if (isLoading) return
-
-    if (firebaseUser) {
-      if (userData) {
-        if (redirectTimer.current) {
-          clearTimeout(redirectTimer.current)
-          redirectTimer.current = null
-        }
-        const target = userData.onboarding_complete ? '/dashboard' : '/onboarding'
-        console.log('[Signup] REDIRECTING to', target)
-        router.replace(target)
-      } else {
-        if (!redirectTimer.current) {
-          console.log('[Signup] firebaseUser set, userData null — starting 5s fallback timer')
-          redirectTimer.current = setTimeout(() => {
-            redirectTimer.current = null
-            console.log('[Signup] FALLBACK TIMEOUT — redirecting to /onboarding')
-            router.replace('/onboarding')
-          }, 5000)
-        }
-      }
-    } else {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current)
-        redirectTimer.current = null
-      }
-    }
-
-    return () => {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current)
-        redirectTimer.current = null
-      }
-    }
-  }, [isLoading, firebaseUser, userData, router])
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   // Validate form
   const validate = (): boolean => {
@@ -144,28 +85,28 @@ export default function SignupPage() {
     }
   }
 
-  // Google signup via redirect
+  // Google signup via popup
   const handleGoogle = async () => {
     setError('')
+    setGoogleLoading(true)
     try {
-      await signInWithRedirect(auth, new GoogleAuthProvider())
+      await signInWithPopup(auth, googleProvider)
     } catch (err: any) {
-      console.error('[Signup] Google sign-up error:', err)
-      setError('Failed to start Google sign-in.')
+      const code = err?.code || ''
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User closed popup — silent
+      } else if (code === 'auth/popup-blocked') {
+        setError('Pop-up blocked. Allow pop-ups and try again.')
+      } else {
+        console.error('[Signup] Google sign-up error:', err)
+        setError('Failed to start Google sign-in.')
+      }
+    } finally {
+      setGoogleLoading(false)
     }
   }
 
-  // Loading initial auth state — show spinner (safety timeout in UserContext handles 5s fallback)
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
-        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
-      </div>
-    )
-  }
-
-  // Already logged in — wait for redirect
+  // Already logged in — AuthGate handles redirect
   if (firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
@@ -254,16 +195,22 @@ export default function SignupPage() {
               <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
             </div>
 
-            <button onClick={handleGoogle}
+            <button onClick={handleGoogle} disabled={googleLoading}
               className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-medium text-sm transition-opacity hover:opacity-90"
-              style={{ background: 'white', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
-              <svg width="18" height="18" viewBox="0 0 18 18">
-                <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-                <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
-                <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
-                <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
-              </svg>
-              Continue with Google
+              style={{ background: 'white', color: '#1a1a1a', border: 'none', cursor: googleLoading ? 'wait' : 'pointer', opacity: googleLoading ? 0.7 : 1 }}>
+              {googleLoading ? (
+                <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                    <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+                    <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+                    <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+                  </svg>
+                  Continue with Google
+                </>
+              )}
             </button>
 
             <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>

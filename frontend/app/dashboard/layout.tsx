@@ -2,11 +2,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { clearAuthCookies } from '@/lib/auth-cookies'
 import { useUser } from '@/context/UserContext'
 import { SubscriptionProvider, useSubscription } from '@/context/SubscriptionContext'
 import UpgradeModal from '@/components/UpgradeModal'
@@ -149,8 +148,7 @@ function Sidebar({ mobile, onClose, onLogout }: { mobile?: boolean; onClose?: ()
 
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const { firebaseUser, userData, isLoading } = useUser()
+  const { userData } = useUser()
   const { isPro, showUpgradeModal, setShowUpgradeModal, upgradeReason, setUpgradeReason } = useSubscription()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [avatarDropdown, setAvatarDropdown] = useState(false)
@@ -165,41 +163,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('click', handler)
   }, [avatarDropdown])
 
-  // FIXED AUTH GUARD:
-  // We wait for isLoading to be false (Firebase session fully resolved) before
-  // making any redirect decision.
-  useEffect(() => {
-    if (!isLoading) {
-      if (!firebaseUser) {
-        console.log('[DashboardLayout] No authenticated user after loading, redirecting to /login')
-        router.replace('/login')
-      } else if (userData !== null && !userData.onboarding_complete) {
-        console.log('[DashboardLayout] User has not completed onboarding, redirecting to /onboarding')
-        router.replace('/onboarding')
-      } else if (userData === null) {
-        console.log('[DashboardLayout] User data missing, redirecting to /onboarding to repair profile')
-        router.replace('/onboarding')
-      }
-    }
-  }, [firebaseUser, isLoading, userData, router])
-
-  // Show spinner while Firebase is resolving session or while we are redirecting.
-  // This is the safe state — we don't know if the user is logged in yet, or we're sending them away.
-  if (isLoading || !firebaseUser || !userData?.onboarding_complete) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-void)' }}>
-        <div className="w-10 h-10 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: 'var(--accent-primary)', borderRightColor: 'var(--accent-secondary)' }} />
-      </div>
-    )
-  }
+  // Auth guards removed — AuthGate + useAuthRedirect handle all routing now.
 
   const pageTitle = pageTitles[pathname] ?? 'Dashboard'
 
   const handleLogout = async () => {
     await signOut(auth)
-    clearAuthCookies()
-    router.push('/')
+    window.location.href = '/'
   }
 
   return (

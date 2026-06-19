@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { auth } from '@/lib/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
 
 interface CheckResult {
   name: string
@@ -23,14 +22,11 @@ export default function SetupPage() {
   }
 
   useEffect(() => {
-    // Check 1: Firebase Auth
-    const unsub = onAuthStateChanged(auth, (user) => {
-      updateCheck(0, {
-        status: 'ok',
-        detail: user ? `Connected. User: ${user.email || user.uid}` : 'Connected. No user signed in.',
-      })
-    }, (err) => {
-      updateCheck(0, { status: 'error', detail: `Error: ${err.message}` })
+    // Check 1: Firebase Auth — use currentUser instead of onAuthStateChanged
+    const user = auth.currentUser
+    updateCheck(0, {
+      status: 'ok',
+      detail: user ? `Connected. User: ${user.email || user.uid}` : 'Connected. No user signed in.',
     })
 
     // Check 2: Supabase connection
@@ -83,7 +79,6 @@ export default function SetupPage() {
     }
 
     checkSupabase()
-    return unsub
   }, [])
 
   const allOk = checks.every(c => c.status === 'ok')

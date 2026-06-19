@@ -1,5 +1,10 @@
-import { initializeApp, getApps } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { initializeApp, getApps, getApp } from "firebase/app"
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  GoogleAuthProvider,
+} from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,6 +15,13 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-export const auth = getAuth(app)
-export default app
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+const auth = getAuth(app)
+setPersistence(auth, browserLocalPersistence)
+
+const googleProvider = new GoogleAuthProvider()
+googleProvider.addScope("email")
+googleProvider.addScope("profile")
+googleProvider.setCustomParameters({ prompt: "select_account" })
+
+export { app, auth, googleProvider }
