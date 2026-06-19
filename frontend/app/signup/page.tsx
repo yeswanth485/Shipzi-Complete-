@@ -80,7 +80,6 @@ export default function SignupPage() {
   }
 
   const handleGoogle = async () => {
-    setLoading(true); setServerError('')
     try {
       const provider = new GoogleAuthProvider()
       let result
@@ -96,6 +95,9 @@ export default function SignupPage() {
         }
         throw popupErr
       }
+
+      setLoading(true); setServerError('')
+
       const uid = result.user.uid
       const { data: existing } = await supabase
         .from('users')

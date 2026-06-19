@@ -163,8 +163,6 @@ export default function LoginPage() {
   }
 
   const handleGoogle = async () => {
-    setLoading(true)
-    setError('')
     try {
       const provider = new GoogleAuthProvider()
       let result
@@ -180,6 +178,9 @@ export default function LoginPage() {
         }
         throw popupErr
       }
+
+      setLoading(true)
+      setError('')
 
       const uid = result.user.uid
       const { data: existing } = await supabase
