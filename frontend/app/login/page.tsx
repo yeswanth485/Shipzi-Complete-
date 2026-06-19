@@ -171,14 +171,12 @@ export default function LoginPage() {
       try {
         result = await signInWithPopup(auth, provider)
       } catch (popupErr: any) {
-        // If popup blocked or closed, fall back to redirect
         if (
           popupErr?.code === 'auth/popup-blocked' ||
           popupErr?.code === 'auth/popup-closed-by-user' ||
           popupErr?.code === 'auth/cancelled-popup-request'
         ) {
-          await signInWithRedirect(auth, provider)
-          return // page will reload after redirect
+          throw new Error('Please allow popups for this site to sign in with Google.')
         }
         throw popupErr
       }

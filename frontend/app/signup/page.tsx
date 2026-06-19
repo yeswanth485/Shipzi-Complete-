@@ -92,8 +92,7 @@ export default function SignupPage() {
           popupErr?.code === 'auth/popup-closed-by-user' ||
           popupErr?.code === 'auth/cancelled-popup-request'
         ) {
-          await signInWithRedirect(auth, provider)
-          return
+          throw new Error('Please allow popups for this site to sign in with Google.')
         }
         throw popupErr
       }
