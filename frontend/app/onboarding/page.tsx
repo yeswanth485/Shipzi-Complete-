@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
+import { useUser } from "@/context/UserContext"
 import { completeOnboarding, supabase } from "@/lib/supabase"
 
 interface FormData {
@@ -39,6 +40,7 @@ const VOLUME_OPTIONS = ["< 500", "500–5K", "5K–50K", "50K+"]
 export default function OnboardingPage() {
   const router = useRouter()
   const { firebaseUser, refreshProfile } = useAuth()
+  const { refreshUser } = useUser()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -53,68 +55,113 @@ export default function OnboardingPage() {
     setForm((f) => ({ ...f, ...updates }))
 
   const handleComplete = async () => {
-    if (!firebaseUser) return
+    if (!firebaseUser) {
+      console.error("[Onboarding] No firebaseUser — cannot save.")
+      setError("Authentication error. Please sign in again.")
+      return
+    }
+
+    const uid = firebaseUser.uid
+    console.log("[Onboarding] Saving for UID:", uid)
     setLoading(true)
     setError("")
-    try {
-      const volumeMap: Record<string, number> = {
-        "< 500": 100,
-        "500–5K": 2500,
-        "5K–50K": 25000,
-        "50K+": 100000,
-      }
 
-      const { data: existingUser, error: checkErr } = await supabase
+    const volumeMap: Record<string, number> = {
+      "< 500": 100,
+      "500–5K": 2500,
+      "5K–50K": 25000,
+      "50K+": 100000,
+    }
+
+    // ── Step 1: Create company row ──
+    let companyId: string | null = null
+    try {
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .insert({
+          name: form.companyName,
+          industry: form.industry,
+          warehouse_size: form.warehouseSize,
+          monthly_shipment_volume: volumeMap[form.volume] || 100,
+        })
+        .select("id")
+        .single()
+
+      if (companyError) throw new Error("Failed to create company: " + companyError.message)
+      companyId = company.id
+      console.log("[Onboarding] Company created:", companyId)
+    } catch (err: unknown) {
+      console.error("[Onboarding] Company creation failed:", err)
+      setError(err instanceof Error ? err.message : "Failed to create company.")
+      setLoading(false)
+      return
+    }
+
+    // ── Step 2: Create or update users row and link to company ──
+    try {
+      const { data: existingUser } = await supabase
         .from("users")
         .select("id")
-        .eq("id", firebaseUser.uid)
+        .eq("id", uid)
         .maybeSingle()
-
-      if (checkErr) {
-        console.warn("[Onboarding] users table check error (non-fatal):", checkErr.message)
-      }
 
       if (!existingUser) {
         const { error: insertErr } = await supabase.from("users").upsert(
           {
-            id: firebaseUser.uid,
+            id: uid,
             email: firebaseUser.email || "",
             full_name: firebaseUser.displayName || "",
             avatar_url: firebaseUser.photoURL || "",
+            company_id: companyId,
             onboarding_complete: true,
           },
           { onConflict: "id" }
         )
-        if (insertErr) {
-          console.warn("[Onboarding] users upsert error (non-fatal):", insertErr.message)
-        }
+        if (insertErr) throw new Error("Failed to create user: " + insertErr.message)
+        console.log("[Onboarding] users row created with company_id:", companyId)
       } else {
         const { error: userError } = await supabase
           .from("users")
-          .update({ onboarding_complete: true })
-          .eq("id", firebaseUser.uid)
-        if (userError) {
-          console.warn("[Onboarding] users update error (non-fatal):", userError.message)
-        }
+          .update({
+            company_id: companyId,
+            onboarding_complete: true,
+            full_name: firebaseUser.displayName || "",
+            avatar_url: firebaseUser.photoURL || "",
+          })
+          .eq("id", uid)
+        if (userError) throw new Error("Failed to update user: " + userError.message)
+        console.log("[Onboarding] users row updated with company_id:", companyId)
       }
-
-      await completeOnboarding(firebaseUser.uid)
-      console.log("[Onboarding] completeOnboarding done, refreshing profile...")
-      await refreshProfile()
-      console.log("[Onboarding] Profile refreshed — redirecting to /dashboard")
-      router.replace("/dashboard")
     } catch (err: unknown) {
-      console.error("[Onboarding] complete error:", err)
-      setError(
-        err instanceof Error ? err.message : "An unknown error occurred."
-      )
+      console.error("[Onboarding] User link failed:", err)
+      setError(err instanceof Error ? err.message : "Failed to save user data.")
       setLoading(false)
-      // Fallback: try to redirect even if there was an error
-      // useAuthRedirect should also catch the onboarding_complete state
-      setTimeout(() => {
-        router.replace("/dashboard")
-      }, 1500)
+      return
     }
+
+    // ── Step 3: Mark onboarding_complete in user_profiles ──
+    try {
+      await completeOnboarding(uid)
+      console.log("[Onboarding] user_profiles marked complete")
+    } catch (err: unknown) {
+      console.error("[Onboarding] completeOnboarding failed:", err)
+      setError("Failed to complete onboarding profile.")
+      setLoading(false)
+      return
+    }
+
+    // ── Step 4: Refresh both contexts then redirect ──
+    try {
+      await refreshProfile()
+      console.log("[Onboarding] AuthContext profile refreshed")
+      await refreshUser()
+      console.log("[Onboarding] UserContext refreshed")
+    } catch (err: unknown) {
+      console.warn("[Onboarding] Context refresh warning:", err)
+    }
+
+    console.log("[Onboarding] All done — redirecting to /dashboard")
+    router.replace("/dashboard")
   }
 
   const canAdvance = [

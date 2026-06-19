@@ -100,17 +100,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             )
             if (profileData) {
               console.log("[Auth] Profile created:", JSON.stringify(profileData))
+              console.log("[Auth] onboarding_complete:", profileData.onboarding_complete)
             } else {
               console.warn("[Auth] upsertProfile returned null — creating minimal profile")
             }
           } else {
             console.log("[Auth] Profile loaded:", JSON.stringify(profileData))
+            console.log("[Auth] onboarding_complete:", profileData.onboarding_complete)
           }
 
           if (mountedRef.current) {
             setFirebaseUser(user)
             setProfile(profileData)
             setLoading(false)
+            console.log("[Auth] onboarding_complete:", profileData?.onboarding_complete)
           }
         } catch (e: unknown) {
           console.error("[Auth] Profile load failed:", e)
