@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -15,8 +15,6 @@ interface FormData {
 }
 interface Errors { fullName?: string; email?: string; password?: string; confirmPassword?: string; companyName?: string; agreeTerms?: string }
 
-function setAuthCookieLocal(uid: string) { setAuthCookie(uid) }
-
 export default function SignupPage() {
   const router = useRouter()
   const { firebaseUser, userData, isLoading } = useUser()
@@ -28,6 +26,43 @@ export default function SignupPage() {
   const [errors,       setErrors]       = useState<Errors>({})
   const [serverError,  setServerError]  = useState('')
 
+  const redirectChecked = useRef(false)
+
+  // Effect 1: Handle Google redirect result — runs ONCE on mount
+  useEffect(() => {
+    if (redirectChecked.current) return
+    redirectChecked.current = true
+
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        const uid = result.user.uid
+        setAuthCookie(uid)
+        const { data, error: supaErr } = await supabase
+          .from('users')
+          .select('onboarding_complete')
+          .eq('id', uid)
+          .single()
+
+        if (supaErr) {
+          console.warn('[SignupPage] Supabase query error, treating as new user:', supaErr.message)
+          router.push('/onboarding')
+          return
+        }
+
+        if (data?.onboarding_complete) {
+          router.replace('/dashboard')
+        } else {
+          router.push('/onboarding')
+        }
+      }
+    }).catch((err: any) => {
+      console.error('[SignupPage] Redirect error:', err)
+      setServerError('Google sign-in failed. Please try again.')
+      setLoading(false)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Effect 2: Redirect already-logged-in users
   useEffect(() => {
     if (firebaseUser && userData?.onboarding_complete) {
       router.replace('/dashboard')
@@ -53,7 +88,6 @@ export default function SignupPage() {
     setLoading(true); setServerError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
-      // Upsert so we don't fail if row already exists
       const { error: insertErr } = await supabase.from('users').upsert({
         id:                  cred.user.uid,
         email:               form.email,
@@ -61,16 +95,20 @@ export default function SignupPage() {
         onboarding_complete: false,
       }, { onConflict: 'id' })
       if (insertErr) {
-        console.error('User insert error:', insertErr)
-        // Continue anyway — onboarding or UserContext will retry
+        console.warn('[SignupPage] Supabase upsert error (non-fatal):', insertErr.message)
       }
-      setAuthCookieLocal(cred.user.uid)
+      setAuthCookie(cred.user.uid)
       router.push('/onboarding')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : ''
-      setServerError(msg.includes('email-already-in-use')
-        ? 'This email is already registered — please sign in instead.'
-        : 'Sign up failed. Please try again.')
+      const code = (err as any)?.code || ''
+      if (code === 'auth/email-already-in-use' || msg.includes('email-already-in-use')) {
+        setServerError('This email is already registered — please sign in instead.')
+      } else if (code === 'auth/weak-password' || msg.includes('weak-password')) {
+        setServerError('Password must be at least 6 characters.')
+      } else {
+        setServerError('Sign up failed. Please try again.')
+      }
       setLoading(false)
     }
   }
@@ -80,44 +118,11 @@ export default function SignupPage() {
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
-      console.error('Google sign-up error:', err)
+      console.error('[SignupPage] Google sign-up error:', err)
       setServerError(err.message || 'Google sign-up failed')
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth)
-        if (result?.user) {
-          const uid = result.user.uid
-          setAuthCookieLocal(uid)
-          const { data } = await supabase
-            .from('users')
-            .select('onboarding_complete')
-            .eq('id', uid)
-            .single()
-          if (data?.onboarding_complete) {
-            router.replace('/dashboard')
-          } else {
-            router.push('/onboarding')
-          }
-          return
-        }
-      } catch (err: any) {
-        console.error('Redirect error:', err)
-        setServerError('Google sign-in failed. Please try again.')
-        setLoading(false)
-        return
-      }
-
-      if (firebaseUser && userData?.onboarding_complete) {
-        router.replace('/dashboard')
-      }
-    }
-    checkRedirect()
-  }, [firebaseUser, userData, router])
 
   const field = (key: keyof FormData) => ({
     value: form[key] as string,

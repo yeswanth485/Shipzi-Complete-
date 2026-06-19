@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -28,44 +28,58 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
+  const redirectChecked = useRef(false)
+
   const handlePostAuth = async (uid: string) => {
     setAuthCookie(uid)
 
-    const { data } = await supabase
-      .from('users')
-      .select('onboarding_complete')
-      .eq('id', uid)
-      .single()
+    try {
+      const { data, error: supaErr } = await supabase
+        .from('users')
+        .select('onboarding_complete')
+        .eq('id', uid)
+        .single()
 
-    if (data?.onboarding_complete) {
-      setOnboardingComplete()
-      router.push('/dashboard')
-    } else {
+      if (supaErr) {
+        console.warn('[LoginPage] Supabase query error, treating as new user:', supaErr.message)
+        router.push('/onboarding')
+        return
+      }
+
+      if (data?.onboarding_complete) {
+        setOnboardingComplete()
+        router.push('/dashboard')
+      } else {
+        router.push('/onboarding')
+      }
+    } catch (err) {
+      console.error('[LoginPage] handlePostAuth unexpected error:', err)
       router.push('/onboarding')
     }
   }
 
+  // Effect 1: Handle Google redirect result — runs ONCE on mount
   useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth)
-        if (result?.user) {
-          setLoading(true)
-          await handlePostAuth(result.user.uid)
-          return
-        }
-      } catch (err: any) {
-        console.error('Redirect error:', err)
-        setError('Google sign-in failed. Please try again.')
-        setLoading(false)
-        return
-      }
+    if (redirectChecked.current) return
+    redirectChecked.current = true
 
-      if (firebaseUser && userData?.onboarding_complete) {
-        router.push('/dashboard')
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        setLoading(true)
+        await handlePostAuth(result.user.uid)
       }
+    }).catch((err) => {
+      console.error('[LoginPage] Redirect result error:', err)
+      setError('Google sign-in failed. Please try again.')
+      setLoading(false)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Effect 2: Redirect already-logged-in users
+  useEffect(() => {
+    if (firebaseUser && userData?.onboarding_complete) {
+      router.push('/dashboard')
     }
-    checkRedirect()
   }, [firebaseUser, userData, router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -75,7 +89,19 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, email, password)
       await handlePostAuth(cred.user.uid)
     } catch (err: any) {
-      setError('Invalid email or password. Please try again.')
+      console.error('[LoginPage] Email login error:', err)
+      const code = err?.code || ''
+      if (code === 'auth/user-not-found') {
+        setError('No account found with this email. Please sign up first.')
+      } else if (code === 'auth/wrong-password') {
+        setError('Incorrect password. Please try again.')
+      } else if (code === 'auth/invalid-email') {
+        setError('Invalid email address.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later.')
+      } else {
+        setError('Login failed. Please check your credentials and try again.')
+      }
       setLoading(false)
     }
   }
@@ -88,13 +114,16 @@ export default function LoginPage() {
       if (name) {
         await updateProfile(cred.user, { displayName: name })
       }
-      await supabase.from('users').upsert({
+      const { error: insertErr } = await supabase.from('users').upsert({
         id: cred.user.uid,
         email: email,
         full_name: name,
         avatar_url: '',
         onboarding_complete: false,
       }, { onConflict: 'id' })
+      if (insertErr) {
+        console.warn('[LoginPage] Supabase upsert error (non-fatal):', insertErr.message)
+      }
       await handlePostAuth(cred.user.uid)
     } catch (err: any) {
       const msg = err.message || 'Registration failed'
@@ -114,13 +143,12 @@ export default function LoginPage() {
     try {
       await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
-      console.error('Google sign-in error:', err)
+      console.error('[LoginPage] Google sign-in error:', err)
       setError(err.message || 'Google sign-in failed')
       setLoading(false)
     }
   }
 
-  // Show loading spinner while checking existing auth state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
@@ -130,7 +158,6 @@ export default function LoginPage() {
     )
   }
 
-  // If user is already logged in, show spinner while redirect completes
   if (firebaseUser) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--bg-void) 0%,#060A10 100%)' }}>
