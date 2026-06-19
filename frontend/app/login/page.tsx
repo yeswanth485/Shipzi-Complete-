@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
   updateProfile,
@@ -97,8 +97,7 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     setLoading(true); setError('')
     try {
-      const result = await signInWithPopup(auth, new GoogleAuthProvider())
-      await handlePostAuth(result.user.uid)
+      await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
       console.error('Google sign-in error:', err)
       setError(err.message || 'Google sign-in failed')
@@ -107,14 +106,20 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        setLoading(true)
-        await handlePostAuth(result.user.uid)
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result?.user) {
+          setLoading(true)
+          await handlePostAuth(result.user.uid)
+        }
+      } catch (err: any) {
+        console.error('Redirect error:', err)
+        setError('Google sign-in failed. Please try again.')
+        setLoading(false)
       }
-    }).catch((err) => {
-      console.error('[LoginPage] Redirect result error:', err)
-    })
+    }
+    checkRedirect()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show loading spinner while checking existing auth state

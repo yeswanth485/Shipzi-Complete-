@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
+import { createUserWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { supabase } from '@/lib/supabase'
 import { setAuthCookie } from '@/lib/auth-cookies'
@@ -29,14 +29,10 @@ export default function SignupPage() {
   const [serverError,  setServerError]  = useState('')
 
   useEffect(() => {
-    if (!isLoading && firebaseUser) {
-      if (userData?.onboarding_complete) {
-        router.replace('/dashboard')
-      } else {
-        router.replace('/onboarding')
-      }
+    if (firebaseUser && userData?.onboarding_complete) {
+      router.replace('/dashboard')
     }
-  }, [isLoading, firebaseUser, userData, router])
+  }, [firebaseUser, userData, router])
 
   const validate = (): boolean => {
     const e: Errors = {}
@@ -80,79 +76,42 @@ export default function SignupPage() {
   }
 
   const handleGoogle = async () => {
+    setLoading(true); setServerError('')
     try {
-      const provider = new GoogleAuthProvider()
-      let result
-      try {
-        result = await signInWithPopup(auth, provider)
-      } catch (popupErr: any) {
-        if (
-          popupErr?.code === 'auth/popup-blocked' ||
-          popupErr?.code === 'auth/popup-closed-by-user' ||
-          popupErr?.code === 'auth/cancelled-popup-request'
-        ) {
-          throw new Error('Please allow popups for this site to sign in with Google.')
-        }
-        throw popupErr
-      }
-
-      setLoading(true); setServerError('')
-
-      const uid = result.user.uid
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', uid)
-        .single()
-      if (!existing) {
-        await supabase.from('users').upsert({
-          id: uid,
-          email: result.user.email!,
-          full_name: result.user.displayName,
-          avatar_url: result.user.photoURL,
-          onboarding_complete: false,
-        }, { onConflict: 'id' })
-      }
-      setAuthCookieLocal(uid)
-      router.push('/onboarding')
+      await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err: any) {
       console.error('Google sign-up error:', err)
-      if (err.message && err.message.includes('popups')) {
-        setServerError(err.message)
-      } else {
-        setServerError('Google sign-up failed. Please try again or use email sign-up.')
-      }
-    } finally {
+      setServerError(err.message || 'Google sign-up failed')
       setLoading(false)
     }
   }
 
-  // Handle redirect result on page load
   useEffect(() => {
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        const uid = result.user.uid
-        const { data: existing } = await supabase
-          .from('users')
-          .select('id')
-          .eq('id', uid)
-          .single()
-        if (!existing) {
-          await supabase.from('users').upsert({
-            id: uid,
-            email: result.user.email!,
-            full_name: result.user.displayName,
-            avatar_url: result.user.photoURL,
-            onboarding_complete: false,
-          }, { onConflict: 'id' })
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result?.user) {
+          const uid = result.user.uid
+          setAuthCookieLocal(uid)
+          const { data } = await supabase
+            .from('users')
+            .select('onboarding_complete')
+            .eq('id', uid)
+            .single()
+          if (data?.onboarding_complete) {
+            router.replace('/dashboard')
+          } else {
+            router.push('/onboarding')
+          }
         }
-        setAuthCookieLocal(uid)
-        router.push('/onboarding')
+      } catch (err: any) {
+        console.error('Redirect error:', err)
+        setServerError('Google sign-in failed. Please try again.')
+        setLoading(false)
       }
-    }).catch((err) => {
-      console.error('Redirect result error:', err)
-    })
-  }, [])
+    }
+    checkRedirect()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const field = (key: keyof FormData) => ({
     value: form[key] as string,
